@@ -1,0 +1,12 @@
+# Never copy the locally-generated Prisma client into Docker.
+# prisma generate always runs fresh from schema.prisma during the build.
+src/generated/
+
+# Common dev artifacts
+.next/
+node_modules/
+npm-debug.log*
+.env*.local
+.git/
+.gitignore
+README.md
