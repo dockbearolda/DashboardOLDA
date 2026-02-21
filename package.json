@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "prisma migrate resolve --rolled-back 20250201000000_french_order_status; prisma migrate deploy && next start",
+    "start": "node scripts/db-resolve.mjs && prisma migrate deploy && next start",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
