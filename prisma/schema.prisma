@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Order {
+  id              String        @id @default(cuid())
+  orderNumber     String        @unique
+  customerName    String
+  customerEmail   String
+  customerPhone   String?
+  status          OrderStatus   @default(PENDING)
+  paymentStatus   PaymentStatus @default(PENDING)
+  total           Float
+  subtotal        Float
+  shipping        Float         @default(0)
+  tax             Float         @default(0)
+  currency        String        @default("EUR")
+  notes           String?
+  shippingAddress Json?
+  billingAddress  Json?
+  items           OrderItem[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id       String  @id @default(cuid())
+  orderId  String
+  order    Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  name     String
+  sku      String?
+  quantity Int
+  price    Float
+  imageUrl String?
+
+  @@map("order_items")
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
