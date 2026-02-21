@@ -56,6 +56,7 @@ RUN mkdir -p node_modules/.bin && \
     chmod +x "node_modules/prisma/$BIN_PATH"
 
 COPY --from=builder --chown=nextjs:nodejs /app/src/generated/prisma ./src/generated/prisma
+COPY --from=builder /app/scripts ./scripts
 
 USER nextjs
 
@@ -63,5 +64,7 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Sync schema (no migration tracking → impossible P3009), then start
-CMD ["sh", "-c", "node_modules/.bin/prisma db push && node server.js"]
+# 1. Migrate enum English→French directly in DB (idempotent, skips if already French)
+# 2. db push sees zero schema drift → exits immediately
+# 3. Start app
+CMD ["sh", "-c", "node scripts/db-resolve.mjs && node_modules/.bin/prisma db push && node server.js"]
