@@ -218,12 +218,17 @@ export function OrderDetail({ order: initialOrder }: OrderDetailProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="PENDING">En attente</SelectItem>
-                    <SelectItem value="PROCESSING">En cours</SelectItem>
-                    <SelectItem value="SHIPPED">Expédié</SelectItem>
-                    <SelectItem value="DELIVERED">Livré</SelectItem>
-                    <SelectItem value="CANCELLED">Annulé</SelectItem>
-                    <SelectItem value="REFUNDED">Remboursé</SelectItem>
+                    <SelectItem value="COMMANDE_A_TRAITER">À traiter</SelectItem>
+                    <SelectItem value="COMMANDE_EN_ATTENTE">En attente</SelectItem>
+                    <SelectItem value="COMMANDE_A_PREPARER">À préparer</SelectItem>
+                    <SelectItem value="MAQUETTE_A_FAIRE">Maquette à faire</SelectItem>
+                    <SelectItem value="PRT_A_FAIRE">PRT à faire</SelectItem>
+                    <SelectItem value="EN_ATTENTE_VALIDATION">Validation en attente</SelectItem>
+                    <SelectItem value="EN_COURS_IMPRESSION">En impression</SelectItem>
+                    <SelectItem value="PRESSAGE_A_FAIRE">Pressage à faire</SelectItem>
+                    <SelectItem value="CLIENT_A_CONTACTER">Client à contacter</SelectItem>
+                    <SelectItem value="CLIENT_PREVENU">Client prévenu</SelectItem>
+                    <SelectItem value="ARCHIVES">Archivé</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

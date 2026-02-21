@@ -55,7 +55,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const validOrderStatuses: OrderStatus[] = [
-    "PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "REFUNDED",
+    "COMMANDE_A_TRAITER", "COMMANDE_EN_ATTENTE", "COMMANDE_A_PREPARER",
+    "MAQUETTE_A_FAIRE", "PRT_A_FAIRE", "EN_ATTENTE_VALIDATION",
+    "EN_COURS_IMPRESSION", "PRESSAGE_A_FAIRE", "CLIENT_A_CONTACTER",
+    "CLIENT_PREVENU", "ARCHIVES",
   ];
   const validPaymentStatuses: PaymentStatus[] = ["PENDING", "PAID", "FAILED", "REFUNDED"];
 

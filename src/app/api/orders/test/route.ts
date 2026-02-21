@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// POST /api/orders/test — create a test order using raw SQL to bypass
-// the stale Prisma client that has old French enum defaults embedded.
+// POST /api/orders/test — create a test order from the dashboard (no secret needed)
+// Uses raw SQL to bypass stale Prisma client enum defaults.
 export async function POST() {
   const orderNumber = `TEST-${Date.now()}`;
-  const id = `cuid_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const id = `c${Date.now()}${Math.random().toString(36).slice(2, 9)}`;
 
   try {
-    // Use raw SQL so the DB's actual enum values are used directly.
-    // prisma.order.create() fails because the generated client embeds an old
-    // French OrderStatus default (COMMANDE_A_TRAITER) that the DB rejects.
     await prisma.$executeRaw`
       INSERT INTO orders (
         id, "orderNumber", "customerName", "customerEmail", "customerPhone",
@@ -22,7 +19,7 @@ export async function POST() {
         'Marie Dupont',
         'marie.dupont@example.com',
         '+33 6 12 34 56 78',
-        'PENDING'::"OrderStatus",
+        'COMMANDE_A_TRAITER'::"OrderStatus",
         'PAID'::"PaymentStatus",
         149.99,
         129.99,
@@ -41,19 +38,25 @@ export async function POST() {
         (${id + '_2'}, ${id}, 'Diffuseur Luxe Bois',    'DLUX-BOIS-01', 1, 30.01)
     `;
 
-    // Read back the created order via raw query (avoids Prisma enum issues)
-    const orders = await prisma.$queryRaw<{ id: string; orderNumber: string; status: string; paymentStatus: string; total: number; createdAt: Date }[]>`
-      SELECT id, "orderNumber", status, "paymentStatus", total, "createdAt"
-      FROM orders WHERE id = ${id}
+    const rows = await prisma.$queryRaw<Record<string, unknown>[]>`
+      SELECT o.*, COALESCE(json_agg(
+        json_build_object('id', i.id, 'name', i.name, 'quantity', i.quantity, 'price', i.price)
+        ORDER BY i.id
+      ) FILTER (WHERE i.id IS NOT NULL), '[]') AS items
+      FROM orders o
+      LEFT JOIN order_items i ON i."orderId" = o.id
+      WHERE o.id = ${id}
+      GROUP BY o.id
     `;
-    const order = orders[0];
+    const order = rows[0];
 
     return NextResponse.json(
       {
         success: true,
         order: {
           ...order,
-          createdAt: order.createdAt.toISOString(),
+          createdAt: order.createdAt instanceof Date ? (order.createdAt as Date).toISOString() : order.createdAt,
+          updatedAt: order.updatedAt instanceof Date ? (order.updatedAt as Date).toISOString() : order.updatedAt,
         },
       },
       { status: 201 }
