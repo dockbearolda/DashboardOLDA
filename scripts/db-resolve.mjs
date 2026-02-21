@@ -1,9 +1,14 @@
 /**
  * Startup schema migration: convert OrderStatus from English to French values.
  * Runs BEFORE `prisma db push` so the enum is already correct and db push
- * detects zero drift (no --accept-data-loss needed, no data loss possible).
+ * detects zero drift.
  *
  * Idempotent: skips entirely if French values are already present.
+ *
+ * Key fix: do NOT run separate UPDATE statements before the ALTER TABLE —
+ * the column is still type OrderStatus (English), so setting French values
+ * would fail. Instead, use a CASE expression directly in the USING clause
+ * of ALTER TABLE to convert data and type atomically in one step.
  */
 import pg from "pg";
 
@@ -39,13 +44,22 @@ try {
           'ARCHIVES'
         );
 
-        UPDATE "orders" SET "status" = 'COMMANDE_A_TRAITER'  WHERE "status"::text = 'PENDING';
-        UPDATE "orders" SET "status" = 'COMMANDE_A_PREPARER' WHERE "status"::text = 'PROCESSING';
-        UPDATE "orders" SET "status" = 'ARCHIVES'            WHERE "status"::text IN ('SHIPPED','DELIVERED','CANCELLED','REFUNDED');
-
         ALTER TABLE "orders" ALTER COLUMN "status" DROP DEFAULT;
+
+        -- Convert data and type atomically via USING — never touch the column
+        -- with English-enum values before this point.
         ALTER TABLE "orders" ALTER COLUMN "status"
-          TYPE "OrderStatus_new" USING ("status"::text::"OrderStatus_new");
+          TYPE "OrderStatus_new"
+          USING (CASE "status"::text
+            WHEN 'PENDING'    THEN 'COMMANDE_A_TRAITER'
+            WHEN 'PROCESSING' THEN 'COMMANDE_A_PREPARER'
+            WHEN 'SHIPPED'    THEN 'ARCHIVES'
+            WHEN 'DELIVERED'  THEN 'ARCHIVES'
+            WHEN 'CANCELLED'  THEN 'ARCHIVES'
+            WHEN 'REFUNDED'   THEN 'ARCHIVES'
+            ELSE                   'COMMANDE_A_TRAITER'
+          END::"OrderStatus_new");
+
         ALTER TABLE "orders" ALTER COLUMN "status" SET DEFAULT 'COMMANDE_A_TRAITER';
 
         DROP TYPE "OrderStatus";
