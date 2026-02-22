@@ -63,3 +63,13 @@ enum PaymentStatus {
   FAILED
   REFUNDED
 }
+
+model PersonNote {
+  id        String   @id @default(cuid())
+  person    String   @unique
+  content   String   @default("")
+  todos     Json     @default("[]")
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("person_notes")
+}
