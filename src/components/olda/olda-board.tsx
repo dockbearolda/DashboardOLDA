@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import type { Order, OrderStatus } from "@/types/order";
-import { Inbox, Pencil, Layers, Phone } from "lucide-react";
+import { Inbox, Pencil, Layers, Phone, FileText, CheckSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PersonNoteModal, type NoteData, type TodoItem } from "./person-note-modal";
 
 // ── Product type detection ─────────────────────────────────────────────────────
 
@@ -46,25 +47,28 @@ const MUG_COLUMNS: KanbanCol[] = [
   { status: "ARCHIVES",              label: "Archive / terminé",   dot: "bg-slate-300" },
 ];
 
-// ── People info boxes ──────────────────────────────────────────────────────────
+// ── People definitions ─────────────────────────────────────────────────────────
 
 const PEOPLE = [
   {
-    name: "Loïc",
-    role: "Nouvelles commandes",
-    icon: Inbox,
+    key:      "loic",
+    name:     "Loïc",
+    role:     "Nouvelles commandes",
+    icon:     Inbox,
     statuses: ["COMMANDE_A_TRAITER", "COMMANDE_EN_ATTENTE"] as OrderStatus[],
   },
   {
-    name: "Charlie",
-    role: "Maquettes & design",
-    icon: Pencil,
+    key:      "charlie",
+    name:     "Charlie",
+    role:     "Maquettes & design",
+    icon:     Pencil,
     statuses: ["MAQUETTE_A_FAIRE"] as OrderStatus[],
   },
   {
-    name: "Mélina",
-    role: "Validation & production",
-    icon: Layers,
+    key:      "melina",
+    name:     "Mélina",
+    role:     "Validation & production",
+    icon:     Layers,
     statuses: [
       "EN_ATTENTE_VALIDATION",
       "PRT_A_FAIRE",
@@ -74,9 +78,10 @@ const PEOPLE = [
     ] as OrderStatus[],
   },
   {
-    name: "Amandine",
-    role: "Relation client",
-    icon: Phone,
+    key:      "amandine",
+    name:     "Amandine",
+    role:     "Relation client",
+    icon:     Phone,
     statuses: ["CLIENT_A_CONTACTER", "CLIENT_PREVENU"] as OrderStatus[],
   },
 ];
@@ -84,7 +89,7 @@ const PEOPLE = [
 // ── Order card ─────────────────────────────────────────────────────────────────
 
 function OrderCard({ order }: { order: Order }) {
-  const items = Array.isArray(order.items) ? order.items : [];
+  const items    = Array.isArray(order.items) ? order.items : [];
   const totalQty = items.reduce((s, i) => s + (i.quantity ?? 0), 0);
   const currency = (order.currency as string) ?? "EUR";
 
@@ -184,13 +189,122 @@ function ProductBoard({
   );
 }
 
+// ── Person note card ───────────────────────────────────────────────────────────
+
+function PersonNoteCard({
+  person,
+  orderCount,
+  note,
+  onClick,
+  index,
+}: {
+  person: typeof PEOPLE[number];
+  orderCount: number;
+  note: NoteData | null;
+  onClick: () => void;
+  index: number;
+}) {
+  const Icon    = person.icon;
+  const pending = (note?.todos ?? []).filter((t: TodoItem) => !t.done).length;
+  const total   = (note?.todos ?? []).length;
+
+  // Note preview: first non-empty line, max 80 chars
+  const preview = note?.content
+    ?.split("\n")
+    .map((l) => l.trim())
+    .find((l) => l.length > 0)
+    ?.slice(0, 80) ?? null;
+
+  return (
+    <button
+      onClick={onClick}
+      className="group relative overflow-hidden text-left rounded-2xl border border-border/60 bg-card/80 backdrop-blur-sm p-6 hover:border-border hover:shadow-md hover:shadow-black/[0.04] dark:hover:shadow-black/20 transition-all duration-300 animate-fade-up cursor-pointer"
+      style={{ animationDelay: `${index * 0.06}s` }}
+    >
+      {/* Top-edge glint on hover */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+      {/* Header row */}
+      <div className="flex items-start justify-between mb-4">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+            {person.role}
+          </p>
+          <p className="text-2xl font-bold tracking-tight">{orderCount}</p>
+          <p className="text-xs text-muted-foreground">{person.name}</p>
+        </div>
+        <div className="rounded-xl p-2.5 bg-muted/70 ring-1 ring-border/40 text-foreground">
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+
+      {/* Note preview area — Apple Notes card feel */}
+      <div className="border-t border-border/40 pt-3 space-y-2">
+        {preview ? (
+          <p className="text-[12px] leading-relaxed text-muted-foreground line-clamp-2 italic">
+            {preview}
+          </p>
+        ) : (
+          <p className="text-[12px] text-muted-foreground/30 italic">
+            Aucune note…
+          </p>
+        )}
+
+        {/* Badges row */}
+        <div className="flex items-center gap-2 pt-0.5">
+          {note?.content && note.content.trim().length > 0 && (
+            <span className="flex items-center gap-1 rounded-md bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              <FileText className="h-2.5 w-2.5" />
+              Note
+            </span>
+          )}
+          {total > 0 && (
+            <span className="flex items-center gap-1 rounded-md bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+              <CheckSquare className="h-2.5 w-2.5" />
+              {pending}/{total}
+            </span>
+          )}
+          <span className="ml-auto text-[10px] text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors">
+            Ouvrir
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
 // ── Main export ────────────────────────────────────────────────────────────────
 
 export function OldaBoard({ orders }: { orders: Order[] }) {
+  const [notes, setNotes]               = useState<Record<string, NoteData>>({});
+  const [activePerson, setActivePerson] = useState<string | null>(null);
+
+  // Fetch all 4 person notes once on mount
+  useEffect(() => {
+    fetch("/api/notes")
+      .then((r) => r.json())
+      .then((data) => {
+        const map: Record<string, NoteData> = {};
+        for (const n of data.notes ?? []) {
+          map[n.person] = {
+            person: n.person,
+            content: n.content ?? "",
+            todos: Array.isArray(n.todos) ? (n.todos as TodoItem[]) : [],
+          };
+        }
+        setNotes(map);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSave = (note: NoteData) => {
+    setNotes((prev) => ({ ...prev, [note.person]: note }));
+  };
+
   const { tshirt, mug, other } = useMemo(() => {
     const tshirt: Order[] = [];
-    const mug: Order[] = [];
-    const other: Order[] = [];
+    const mug: Order[]    = [];
+    const other: Order[]  = [];
     for (const o of orders) {
       const t = detectProductType(o);
       if (t === "tshirt") tshirt.push(o);
@@ -199,6 +313,10 @@ export function OldaBoard({ orders }: { orders: Order[] }) {
     }
     return { tshirt, mug, other };
   }, [orders]);
+
+  const activePersonData = activePerson
+    ? PEOPLE.find((p) => p.key === activePerson) ?? null
+    : null;
 
   return (
     <div className="p-6 space-y-8">
@@ -214,63 +332,44 @@ export function OldaBoard({ orders }: { orders: Order[] }) {
         </p>
       </div>
 
-      {/* ── People cards — même structure exacte que StatsCard ────────────── */}
+      {/* ── Person note cards ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {PEOPLE.map((person, i) => {
           const personOrders = orders.filter((o) =>
             person.statuses.includes(o.status)
           );
-          const Icon = person.icon;
           return (
-            <div
-              key={person.name}
-              className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card/80 backdrop-blur-sm p-6 hover:border-border hover:shadow-md hover:shadow-black/[0.04] dark:hover:shadow-black/20 transition-all duration-300 animate-fade-up"
-              style={{ animationDelay: `${i * 0.06}s` }}
-            >
-              {/* Top-edge glint on hover */}
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
-                    {person.role}
-                  </p>
-                  <p className="text-2xl font-bold tracking-tight">
-                    {personOrders.length}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{person.name}</p>
-                </div>
-                <div className="rounded-xl p-2.5 bg-muted/70 ring-1 ring-border/40 text-foreground">
-                  <Icon className="h-4 w-4" />
-                </div>
-              </div>
-
-              {personOrders.length > 0 && (
-                <div className="mt-4 space-y-0.5">
-                  {personOrders.slice(0, 2).map((o) => (
-                    <p key={o.id} className="text-[11px] text-muted-foreground truncate">
-                      #{o.orderNumber} — {o.customerName}
-                    </p>
-                  ))}
-                  {personOrders.length > 2 && (
-                    <p className="text-[10px] text-muted-foreground/50">
-                      +{personOrders.length - 2} de plus
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+            <PersonNoteCard
+              key={person.key}
+              person={person}
+              orderCount={personOrders.length}
+              note={notes[person.key] ?? null}
+              onClick={() => setActivePerson(person.key)}
+              index={i}
+            />
           );
         })}
       </div>
 
-      {/* ── Catégories ────────────────────────────────────────────────────── */}
+      {/* ── Catégories kanban ──────────────────────────────────────────────── */}
       <ProductBoard label="T-shirt" columns={TSHIRT_COLUMNS} orders={tshirt} />
       <ProductBoard label="Mug"     columns={MUG_COLUMNS}    orders={mug} />
       {other.length > 0 && (
         <ProductBoard label="Autre" columns={TSHIRT_COLUMNS} orders={other} />
       )}
 
+      {/* ── Apple Notes modal ──────────────────────────────────────────────── */}
+      {activePersonData && (
+        <PersonNoteModal
+          open={activePerson !== null}
+          onOpenChange={(o) => { if (!o) setActivePerson(null); }}
+          personKey={activePersonData.key}
+          personName={activePersonData.name}
+          personRole={activePersonData.role}
+          initialNote={notes[activePersonData.key] ?? null}
+          onSave={handleSave}
+        />
+      )}
     </div>
   );
 }
