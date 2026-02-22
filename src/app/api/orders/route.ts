@@ -158,11 +158,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Read back the created/updated order
+    // Read back the created/updated order — include ALL item fields so SSE
+    // clients receive a complete payload (imageUrl needed for Carte Totale visuals).
     const rows = await prisma.$queryRaw<Record<string, unknown>[]>`
       SELECT o.*, COALESCE(json_agg(
-        json_build_object('id', i.id, 'name', i.name, 'quantity', i.quantity, 'price', i.price)
-        ORDER BY i.id
+        json_build_object(
+          'id', i.id, 'orderId', i."orderId", 'name', i.name,
+          'sku', i.sku, 'quantity', i.quantity, 'price', i.price, 'imageUrl', i."imageUrl"
+        ) ORDER BY i.id
       ) FILTER (WHERE i.id IS NOT NULL), '[]') AS items
       FROM orders o
       LEFT JOIN order_items i ON i."orderId" = o.id

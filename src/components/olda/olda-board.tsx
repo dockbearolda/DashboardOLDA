@@ -327,14 +327,14 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
   const [notes, setNotes]               = useState<Record<string, NoteData>>({});
   const [activePerson, setActivePerson] = useState<string | null>(null);
 
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mountedRef    = useRef(true);
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  // ── Highlight new order IDs for 6 s ───────────────────────────────────────
 
   const markNew = useCallback((ids: string[]) => {
     if (ids.length === 0) return;
     setNewOrderIds((prev) => new Set([...prev, ...ids]));
-    // Remove the highlight after 6 seconds
     setTimeout(() => {
       setNewOrderIds((prev) => {
         const next = new Set(prev);
@@ -344,75 +344,105 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
     }, 6_000);
   }, []);
 
-  const mergeOrders = useCallback(
-    (incoming: Order[]) => {
+  // ── Full refresh: replaces ALL orders so imageUrl / status are always fresh.
+  //    Detects truly new IDs (not in previous state) and highlights them.       ──
+
+  const refreshOrders = useCallback(async () => {
+    try {
+      const res  = await fetch("/api/orders");
+      const data = (await res.json()) as { orders: Order[] };
+      const incoming = data.orders ?? [];
       setOrders((prev) => {
         const existingIds = new Set(prev.map((o) => o.id));
-        const fresh = incoming.filter((o) => !existingIds.has(o.id));
-        if (fresh.length === 0) return prev;
-        markNew(fresh.map((o) => o.id));
-        return [...fresh, ...prev];
+        const freshIds    = incoming
+          .filter((o) => !existingIds.has(o.id))
+          .map((o) => o.id);
+        if (freshIds.length > 0) markNew(freshIds);
+        return incoming; // full replace — keeps imageUrl / status current
       });
-    },
-    [markNew]
-  );
+    } catch {
+      /* ignore transient network errors */
+    }
+  }, [markNew]);
 
-  // ── Fallback polling (every 15 s) ──────────────────────────────────────────
+  // ── Fallback polling every 12 s (used when SSE is unavailable) ────────────
 
   const startPolling = useCallback(() => {
-    if (pollTimerRef.current) return; // already running
-    pollTimerRef.current = setInterval(async () => {
-      try {
-        const res  = await fetch("/api/orders");
-        const data = await res.json() as { orders: Order[] };
-        mergeOrders(data.orders ?? []);
-      } catch {
-        /* ignore transient network errors */
-      }
-    }, 15_000);
-  }, [mergeOrders]);
+    if (pollTimerRef.current) return;
+    pollTimerRef.current = setInterval(() => {
+      if (mountedRef.current) refreshOrders();
+    }, 12_000);
+  }, [refreshOrders]);
+
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
+
+  // ── Initial fetch on mount ─────────────────────────────────────────────────
+  // Covers the gap between SSR page render and SSE connection establishment.
+
+  useEffect(() => {
+    refreshOrders();
+  }, [refreshOrders]);
+
+  // ── Refresh on tab visibility (user returns after being away) ─────────────
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshOrders();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refreshOrders]);
 
   // ── SSE subscription ───────────────────────────────────────────────────────
 
   useEffect(() => {
+    mountedRef.current = true;
     let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
     const connect = () => {
+      if (!mountedRef.current) return;
       try {
         es = new EventSource("/api/orders/stream");
 
         es.addEventListener("connected", () => {
+          if (!mountedRef.current) return;
           setSseConnected(true);
-          // SSE is live → stop polling if it was running
-          if (pollTimerRef.current) {
-            clearInterval(pollTimerRef.current);
-            pollTimerRef.current = null;
-          }
+          stopPolling(); // SSE is live — polling not needed
         });
 
         es.addEventListener("new-order", (event) => {
+          if (!mountedRef.current) return;
           try {
             const order = JSON.parse((event as MessageEvent).data) as Order;
+            // Prepend immediately for instant display; full refresh catches rest
             setOrders((prev) => {
               if (prev.find((o) => o.id === order.id)) return prev;
               markNew([order.id]);
               return [order, ...prev];
             });
+            // Schedule a full refresh 2 s later to ensure imageUrl etc. are
+            // populated (SSE payload already includes them, but this is a
+            // safety net for any timing edge-case).
+            setTimeout(refreshOrders, 2_000);
           } catch {
-            /* malformed payload — ignore */
+            /* malformed SSE payload — ignore */
           }
         });
 
         es.onerror = () => {
+          if (!mountedRef.current) return;
           setSseConnected(false);
           es?.close();
-          // Fall back to polling until SSE recovers
-          startPolling();
-          // Attempt SSE reconnect after 10 s
-          setTimeout(connect, 10_000);
+          startPolling(); // fall back until SSE reconnects
+          reconnectTimer = setTimeout(connect, 10_000);
         };
       } catch {
-        // EventSource not supported or blocked — use polling
         startPolling();
       }
     };
@@ -420,13 +450,12 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
     connect();
 
     return () => {
+      mountedRef.current = false;
       es?.close();
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
-      }
+      stopPolling();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
     };
-  }, [markNew, startPolling]);
+  }, [markNew, refreshOrders, startPolling, stopPolling]);
 
   // ── Fetch person notes once on mount ──────────────────────────────────────
 
