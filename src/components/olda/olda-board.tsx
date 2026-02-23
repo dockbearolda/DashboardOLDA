@@ -2,7 +2,12 @@
 
 /**
  * OldaBoard — Light mode only. Zero dark: variants.
- * Sticky header (RemindersGrid) + category tabs + kanban boards.
+ *
+ * Hierarchy:
+ *   ┌─ sticky header ─ RemindersGrid (4 person cards) ───────────────┐
+ *   ├─ hero (title + live indicator) ────────────────────────────────┤
+ *   ├─ tabs: Tshirt | Tasse (soon) | Accessoire (soon) ──────────────┤
+ *   └─ workspace: single kanban grid, ALL columns use TshirtOrderCard ┘
  */
 
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
@@ -43,105 +48,78 @@ const TSHIRT_COLUMNS: KanbanCol[] = [
   { status: "ARCHIVES",              label: "Archive / terminé",   dot: "bg-slate-300" },
 ];
 
-const MUG_COLUMNS: KanbanCol[] = [
-  { status: "COMMANDE_A_TRAITER",    label: "Commande à traiter",  dot: "bg-blue-400" },
-  { status: "COMMANDE_EN_ATTENTE",   label: "Urgence",             dot: "bg-red-400" },
-  { status: "MAQUETTE_A_FAIRE",      label: "Maquette à faire",    dot: "bg-violet-400" },
-  { status: "EN_ATTENTE_VALIDATION", label: "En attente client",   dot: "bg-amber-400" },
-  { status: "COMMANDE_A_PREPARER",   label: "À produire",          dot: "bg-orange-400" },
-  { status: "CLIENT_A_CONTACTER",    label: "Client à contacter",  dot: "bg-pink-400" },
-  { status: "ARCHIVES",              label: "Archive / terminé",   dot: "bg-slate-300" },
-];
-
-// ── People ─────────────────────────────────────────────────────────────────────
+// ── People (for reminders grid key mapping) ────────────────────────────────────
 
 const PEOPLE = [
-  { key: "loic",     name: "Loïc",     icon: Inbox,   statuses: ["COMMANDE_A_TRAITER", "COMMANDE_EN_ATTENTE"] as OrderStatus[] },
-  { key: "charlie",  name: "Charlie",  icon: Pencil,  statuses: ["MAQUETTE_A_FAIRE"] as OrderStatus[] },
-  { key: "melina",   name: "Mélina",   icon: Layers,  statuses: ["EN_ATTENTE_VALIDATION", "PRT_A_FAIRE", "COMMANDE_A_PREPARER", "EN_COURS_IMPRESSION", "PRESSAGE_A_FAIRE"] as OrderStatus[] },
-  { key: "amandine", name: "Amandine", icon: Phone,   statuses: ["CLIENT_A_CONTACTER", "CLIENT_PREVENU"] as OrderStatus[] },
-];
+  { key: "loic",     icon: Inbox  },
+  { key: "charlie",  icon: Pencil },
+  { key: "melina",   icon: Layers },
+  { key: "amandine", icon: Phone  },
+] as const;
 
 // ── Category tabs ──────────────────────────────────────────────────────────────
 
 type BoardTab = "tshirt" | "mug" | "other";
 
 const TABS: { key: BoardTab; label: string; enabled: boolean }[] = [
-  { key: "tshirt", label: "Commande Tshirt",     enabled: true  },
-  { key: "mug",    label: "Commande Tasse",       enabled: false },
-  { key: "other",  label: "Commande accessoire",  enabled: false },
+  { key: "tshirt", label: "Commande Tshirt",    enabled: true  },
+  { key: "mug",    label: "Commande Tasse",      enabled: false },
+  { key: "other",  label: "Commande accessoire", enabled: false },
 ];
 
-// ── Standard compact order card ────────────────────────────────────────────────
-
-function OrderCard({ order }: { order: Order }) {
-  const items    = Array.isArray(order.items) ? order.items : [];
-  const totalQty = items.reduce((s, i) => s + (i.quantity ?? 0), 0);
-  const currency = (order.currency as string) ?? "EUR";
-
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3 hover:border-gray-300 hover:shadow-sm transition-all cursor-default">
-      <p className="text-[13px] font-bold text-gray-900 truncate">#{order.orderNumber}</p>
-      <p className="text-[13px] text-gray-500 mt-0.5 truncate">{order.customerName}</p>
-      <div className="flex items-center justify-between mt-2 gap-1">
-        <span className="text-[12px] text-gray-400">{totalQty} art.</span>
-        <span className="text-[13px] font-semibold tabular-nums text-gray-900">
-          {Number(order.total).toLocaleString("fr-FR", { style: "currency", currency, maximumFractionDigits: 0 })}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 // ── Kanban column ──────────────────────────────────────────────────────────────
+// All columns use TshirtOrderCard (full card with QR, L1-L6, todos).
 
 function KanbanColumn({
-  col, orders, richCards, newOrderIds,
+  col,
+  orders,
+  newOrderIds,
 }: {
   col: KanbanCol;
   orders: Order[];
-  richCards?: boolean;
   newOrderIds?: Set<string>;
 }) {
-  const colWidth = richCards ? "w-64" : "w-44";
-
   return (
-    <div className={cn("shrink-0 flex flex-col gap-2", colWidth)}>
-      {/* Column header / status bubble */}
+    <div className="shrink-0 w-[272px] flex flex-col gap-2">
+
+      {/* Status bubble / column header */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm px-3 py-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", col.dot)} />
-          <span className="text-[13px] font-semibold text-gray-900 truncate leading-tight">{col.label}</span>
+          <span className="text-[13px] font-semibold text-gray-900 truncate leading-tight">
+            {col.label}
+          </span>
         </div>
         <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[12px] font-semibold text-gray-500">
           {orders.length}
         </span>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      {/* Cards */}
+      <div className="flex flex-col gap-2">
         {orders.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-gray-200 h-12 flex items-center justify-center">
+          <div className="rounded-xl border border-dashed border-gray-200 h-14 flex items-center justify-center">
             <span className="text-[12px] text-gray-300">vide</span>
           </div>
-        ) : richCards ? (
-          orders.map((o) => <TshirtOrderCard key={o.id} order={o} isNew={newOrderIds?.has(o.id)} />)
         ) : (
-          orders.map((o) => <OrderCard key={o.id} order={o} />)
+          orders.map((o) => (
+            <TshirtOrderCard key={o.id} order={o} isNew={newOrderIds?.has(o.id)} />
+          ))
         )}
       </div>
     </div>
   );
 }
 
-// ── Product board ──────────────────────────────────────────────────────────────
+// ── Kanban board (single tab workspace) ───────────────────────────────────────
 
-function ProductBoard({
-  label, columns, orders, richFirstColumn, newOrderIds,
+function KanbanBoard({
+  columns,
+  orders,
+  newOrderIds,
 }: {
-  label: string;
   columns: KanbanCol[];
   orders: Order[];
-  richFirstColumn?: boolean;
   newOrderIds?: Set<string>;
 }) {
   const ordersByStatus = useMemo(() => {
@@ -149,31 +127,22 @@ function ProductBoard({
     for (const col of columns) map[col.status] = [];
     for (const order of orders) {
       if (map[order.status] !== undefined) map[order.status].push(order);
-      else map[columns[0].status].push(order);
+      else map[columns[0].status].push(order); // fallback → first column
     }
     return map;
   }, [columns, orders]);
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-center gap-2">
-        <h2 className="text-[18px] font-semibold text-gray-900">{label}</h2>
-        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[13px] font-medium text-gray-500">
-          {orders.length} commande{orders.length !== 1 ? "s" : ""}
-        </span>
-      </div>
-      <div className="flex gap-3 overflow-x-auto pb-3">
-        {columns.map((col, idx) => (
-          <KanbanColumn
-            key={col.status}
-            col={col}
-            orders={ordersByStatus[col.status] ?? []}
-            richCards={richFirstColumn && idx === 0}
-            newOrderIds={newOrderIds}
-          />
-        ))}
-      </div>
-    </section>
+    <div className="flex gap-3 overflow-x-auto pb-4">
+      {columns.map((col) => (
+        <KanbanColumn
+          key={col.status}
+          col={col}
+          orders={ordersByStatus[col.status] ?? []}
+          newOrderIds={newOrderIds}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -196,15 +165,17 @@ function LiveIndicator({ connected }: { connected: boolean }) {
 // ── Main export ────────────────────────────────────────────────────────────────
 
 export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
-  const [orders, setOrders]           = useState<Order[]>(initialOrders);
-  const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set());
+  const [orders, setOrders]             = useState<Order[]>(initialOrders);
+  const [newOrderIds, setNewOrderIds]   = useState<Set<string>>(new Set());
   const [sseConnected, setSseConnected] = useState(false);
-  const [notes, setNotes]             = useState<Record<string, NoteData>>({});
-  const [notesReady, setNotesReady]   = useState(false);
-  const [activeTab, setActiveTab]     = useState<BoardTab>("tshirt");
+  const [notes, setNotes]               = useState<Record<string, NoteData>>({});
+  const [notesReady, setNotesReady]     = useState(false);
+  const [activeTab, setActiveTab]       = useState<BoardTab>("tshirt");
 
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef   = useRef(true);
+
+  // ── New-order highlight (6 s) ──────────────────────────────────────────────
 
   const markNew = useCallback((ids: string[]) => {
     if (ids.length === 0) return;
@@ -217,6 +188,8 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
       });
     }, 6_000);
   }, []);
+
+  // ── Full refresh ───────────────────────────────────────────────────────────
 
   const refreshOrders = useCallback(async () => {
     try {
@@ -231,6 +204,8 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
       });
     } catch { /* ignore */ }
   }, [markNew]);
+
+  // ── Fallback polling ───────────────────────────────────────────────────────
 
   const startPolling = useCallback(() => {
     if (pollTimerRef.current) return;
@@ -248,6 +223,8 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [refreshOrders]);
+
+  // ── SSE subscription ───────────────────────────────────────────────────────
 
   useEffect(() => {
     mountedRef.current = true;
@@ -295,19 +272,27 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
     };
   }, [markNew, refreshOrders, startPolling, stopPolling]);
 
+  // ── Person notes ───────────────────────────────────────────────────────────
+
   useEffect(() => {
     fetch("/api/notes")
       .then((r) => r.json())
       .then((data) => {
         const map: Record<string, NoteData> = {};
         for (const n of data.notes ?? []) {
-          map[n.person] = { person: n.person, content: n.content ?? "", todos: Array.isArray(n.todos) ? (n.todos as TodoItem[]) : [] };
+          map[n.person] = {
+            person:  n.person,
+            content: n.content ?? "",
+            todos:   Array.isArray(n.todos) ? (n.todos as TodoItem[]) : [],
+          };
         }
         setNotes(map);
         setNotesReady(true);
       })
       .catch(() => {});
   }, []);
+
+  // ── Categorise orders ──────────────────────────────────────────────────────
 
   const { tshirt, mug, other } = useMemo(() => {
     const tshirt: Order[] = [], mug: Order[] = [], other: Order[] = [];
@@ -322,18 +307,23 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
 
   const notesMap = Object.fromEntries(PEOPLE.map((p) => [p.key, notes[p.key]?.todos ?? []]));
 
+  // Select orders for active tab
+  const activeOrders = activeTab === "tshirt" ? tshirt : activeTab === "mug" ? mug : other;
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div className="flex flex-col bg-white min-h-screen">
 
-      {/* ══ Sticky header — person reminder cards ═════════════════════════════ */}
+      {/* ══ ZONE 1 — Sticky header: 4 person reminder cards ══════════════════ */}
       <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm">
         <div className="px-6 py-3">
           <RemindersGrid key={String(notesReady)} notesMap={notesMap} />
         </div>
       </div>
 
-      {/* ══ Scrollable body ════════════════════════════════════════════════════ */}
-      <div className="px-6 py-6 space-y-6">
+      {/* ══ ZONE 2 — Scrollable workspace ════════════════════════════════════ */}
+      <div className="px-6 py-6 space-y-5">
 
         {/* ── Hero ── */}
         <div className="flex items-end justify-between">
@@ -341,7 +331,9 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
             <p className="text-[14px] font-semibold uppercase tracking-widest text-gray-400 mb-1">
               Atelier
             </p>
-            <h1 className="text-[26px] font-bold tracking-tight text-gray-900">Dashboard OLDA</h1>
+            <h1 className="text-[26px] font-bold tracking-tight text-gray-900">
+              Dashboard OLDA
+            </h1>
             <p className="text-[15px] text-gray-500 mt-1">
               Vue d&apos;ensemble de la production par type de produit
             </p>
@@ -351,7 +343,7 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
           </div>
         </div>
 
-        {/* ── Category tabs ── */}
+        {/* ── Navigation tabs ── */}
         <div className="border-b border-gray-200 flex gap-0">
           {TABS.map((tab) => (
             <button
@@ -378,16 +370,12 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
           ))}
         </div>
 
-        {/* ── Active board ── */}
-        {activeTab === "tshirt" && (
-          <ProductBoard label="T-shirt" columns={TSHIRT_COLUMNS} orders={tshirt} richFirstColumn newOrderIds={newOrderIds} />
-        )}
-        {activeTab === "mug" && (
-          <ProductBoard label="Mug" columns={MUG_COLUMNS} orders={mug} newOrderIds={newOrderIds} />
-        )}
-        {activeTab === "other" && (
-          <ProductBoard label="Accessoire" columns={TSHIRT_COLUMNS} orders={other} newOrderIds={newOrderIds} />
-        )}
+        {/* ── ZONE 3 — Kanban workspace (single board, updates with tab) ── */}
+        <KanbanBoard
+          columns={TSHIRT_COLUMNS}
+          orders={activeOrders}
+          newOrderIds={newOrderIds}
+        />
       </div>
 
       {/* ── New-order toast ── */}
