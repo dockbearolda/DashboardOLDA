@@ -292,7 +292,7 @@ export function TshirtOrderCard({ order, isNew }: { order: Order; isNew?: boolea
       <div
         className={cn(
           "rounded-2xl bg-white border overflow-hidden",
-          "transition-all duration-200 cursor-pointer select-none",
+          "transition-all duration-200 cursor-pointer select-none [touch-action:manipulation]",
           "hover:shadow-md hover:shadow-black/[0.07] hover:border-gray-300",
           isNew
             ? "border-blue-400/60 ring-2 ring-blue-400/30 animate-fade-up"
