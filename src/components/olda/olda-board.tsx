@@ -624,16 +624,11 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
       style={{ fontFamily: "'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" }}
     >
 
-      {/* ── Header : hero + tabs top-right ──────────────────────────────────── */}
+      {/* ── Header : titre dynamique + tabs top-right ──────────────────────── */}
       <div className="shrink-0 pt-safe px-4 sm:px-6 pt-5 md:pt-6 pb-3 flex items-center justify-between gap-4 border-b border-gray-100">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-1">
-            Atelier
-          </p>
-          <h1 className="text-[20px] md:text-[24px] font-bold tracking-tight text-gray-900 leading-tight">
-            Dashboard OLDA
-          </h1>
-        </div>
+        <h1 className="text-[20px] md:text-[24px] font-bold tracking-tight text-gray-900">
+          {viewTab === 'flux' ? 'Flux' : 'Commandes'}
+        </h1>
 
         {/* Tabs top-right : Flux | Commandes */}
         <div className="flex items-center gap-3 shrink-0">
