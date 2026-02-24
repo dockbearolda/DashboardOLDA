@@ -624,32 +624,29 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
       style={{ fontFamily: "'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" }}
     >
 
-      {/* ── Header : titre dynamique + tabs top-right ──────────────────────── */}
-      <div className="shrink-0 pt-safe px-4 sm:px-6 pt-5 md:pt-6 pb-3 flex items-center justify-between gap-4 border-b border-gray-100">
-        <h1 className="text-[20px] md:text-[24px] font-bold tracking-tight text-gray-900">
-          {viewTab === 'flux' ? 'Flux' : 'Commandes'}
-        </h1>
-
-        {/* Tabs top-right : Flux | Commandes */}
-        <div className="flex items-center gap-3 shrink-0">
+      {/* ── Header : tabs à gauche · indicateur live à droite ─────────────── */}
+      <div className="shrink-0 px-4 sm:px-6 pt-5 pb-3 flex items-center gap-3 border-b border-gray-100">
+        {/* Tabs — alignés à gauche */}
+        <div className="flex gap-1 p-1 rounded-xl bg-gray-100/80">
+          {(['flux', 'commandes'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setViewTab(v)}
+              className={cn(
+                "px-3.5 py-1.5 rounded-[10px] text-[13px] font-semibold transition-all",
+                "[touch-action:manipulation]",
+                viewTab === v
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              {v === 'flux' ? 'Flux' : 'Commandes'}
+            </button>
+          ))}
+        </div>
+        {/* Indicateur live — repoussé à droite */}
+        <div className="ml-auto">
           <LiveIndicator connected={sseConnected} />
-          <div className="flex gap-1 p-1 rounded-xl bg-gray-100/80">
-            {(['flux', 'commandes'] as const).map((v) => (
-              <button
-                key={v}
-                onClick={() => setViewTab(v)}
-                className={cn(
-                  "px-3.5 py-1.5 rounded-[10px] text-[13px] font-semibold transition-all",
-                  "[touch-action:manipulation]",
-                  viewTab === v
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                )}
-              >
-                {v === 'flux' ? 'Flux' : 'Commandes'}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 

@@ -3,57 +3,19 @@
 /**
  * TshirtOrderCard
  * ─ Bulle Apple (coins 24px, fond blanc, ombre légère, SF Pro)
- * ─ Supporte les deux formats : webhook legacy + nouveau format Olda Studio JSON
- * ─ Click → Fiche de commande (modal) avec @media print format autocollant
- * ─ Attribution utilisateur : chaque tâche ajoutée est préfixée [prenom]
+ * ─ Layout : QR gauche · Identité/Production/Prix droite
+ * ─ Section Note sous la carte si order.notes existe
+ * ─ Bouton Éditer (Pencil) + Supprimer (X rouge) visibles au hover
  * ─ Light mode only — zero dark: variants
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { Check, Plus, X, Upload, AlertCircle, Package, Printer } from "lucide-react";
+import { X, Upload, AlertCircle, Package, Printer, Pencil } from "lucide-react";
 import { format, differenceInCalendarDays } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import type { Order, OrderItem, OldaExtraData } from "@/types/order";
-
-// ── Utilisateur connecté (session 07h/13h) ────────────────────────────────────
-// Lit le nom depuis localStorage sans prop drilling — utilisé pour attribuer les tâches.
-
-function useActiveUser(): string {
-  const [user, setUser] = useState("");
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("olda_session");
-      if (!raw) return;
-      const s = JSON.parse(raw) as { name?: string };
-      setUser(s.name ?? "");
-    } catch { /* ignore */ }
-  }, []);
-  return user;
-}
-
-// ── Per-card todo ──────────────────────────────────────────────────────────────
-
-interface CardTodo { id: string; text: string; done: boolean; }
-
-function useTodos(orderId: string) {
-  const key = `olda-todos-${orderId}`;
-  const [todos, setTodos] = useState<CardTodo[]>(() => {
-    if (typeof window === "undefined") return [];
-    try { const r = localStorage.getItem(key); return r ? (JSON.parse(r) as CardTodo[]) : []; }
-    catch { return []; }
-  });
-  const save = useCallback((u: CardTodo[]) => {
-    setTodos(u);
-    try { localStorage.setItem(key, JSON.stringify(u)); } catch { /* quota */ }
-  }, [key]);
-  // Le texte est déjà préfixé [utilisateur] par l'appelant si nécessaire
-  const addTodo    = useCallback((t: string) => { if (t.trim()) save([...todos, { id: crypto.randomUUID(), text: t.trim(), done: false }]); }, [todos, save]);
-  const toggleTodo = useCallback((id: string) => save(todos.map((t) => t.id === id ? { ...t, done: !t.done } : t)), [todos, save]);
-  const deleteTodo = useCallback((id: string) => save(todos.filter((t) => t.id !== id)), [todos, save]);
-  return { todos, addTodo, toggleTodo, deleteTodo };
-}
 
 // ── Local images ───────────────────────────────────────────────────────────────
 
@@ -88,12 +50,11 @@ function fmtPrice(amount: number, currency: string) {
   return Number(amount).toLocaleString("fr-FR", { style: "currency", currency, maximumFractionDigits: 0 });
 }
 
-/** Deadline → "Dans 3 jours · 15 janv." | "Aujourd'hui !" | "⚠️ En retard (2j)" */
 function deadlineLabel(deadline: string | undefined | null): string | null {
   if (!deadline) return null;
   try {
     const d = new Date(deadline);
-    if (isNaN(d.getTime())) return deadline; // texte brut non parseable → affiché tel quel
+    if (isNaN(d.getTime())) return deadline;
     const diff = differenceInCalendarDays(d, new Date());
     if (diff < 0)   return `⚠️ En retard (${Math.abs(diff)}j)`;
     if (diff === 0) return "Aujourd'hui !";
@@ -102,7 +63,6 @@ function deadlineLabel(deadline: string | undefined | null): string | null {
   } catch { return deadline; }
 }
 
-/** Lit les données extra Olda Studio depuis shippingAddress (JSONB) */
 function readExtra(order: Order): OldaExtraData {
   if (!order.shippingAddress) return {};
   const sa = order.shippingAddress as Record<string, unknown>;
@@ -110,13 +70,21 @@ function readExtra(order: Order): OldaExtraData {
   return {};
 }
 
-/** Vérifie si une chaîne est un code DTF (pas une URL ni un data URL) */
 function isDtfCode(s: string | undefined | null): boolean {
   if (!s) return false;
   return !s.startsWith("http") && !s.startsWith("data:");
 }
 
-// ── Pastille de paiement ───────────────────────────────────────────────────────
+// ── Patch payload ──────────────────────────────────────────────────────────────
+
+export interface OrderPatch {
+  customerName?: string;
+  customerPhone?: string;
+  notes?: string;
+  coteLogoAr?: string;
+}
+
+// ── Pastille paiement ──────────────────────────────────────────────────────────
 
 function PaymentDot({ status }: { status: string }) {
   const paid = status === "PAID";
@@ -131,7 +99,7 @@ function PaymentDot({ status }: { status: string }) {
   );
 }
 
-// ── Fiche de commande (modal + impression) ─────────────────────────────────────
+// ── Modal fiche de commande (impression) ───────────────────────────────────────
 
 function OrderFicheModal({
   order, extra, images, addImage, origin, onClose,
@@ -147,7 +115,6 @@ function OrderFicheModal({
   const items    = Array.isArray(order.items) ? order.items : [];
   const currency = (order.currency as string) ?? "EUR";
 
-  // QR Code : URL vers la fiche complète dans le dashboard
   const qrValue = origin
     ? `${origin}/dashboard/orders/${order.id}`
     : order.orderNumber;
@@ -155,12 +122,10 @@ function OrderFicheModal({
   const createdAt     = order.createdAt instanceof Date ? order.createdAt : new Date(order.createdAt as string);
   const formattedDate = format(createdAt, "d MMMM yyyy", { locale: fr });
 
-  // ── Données de la fiche — Olda Studio en priorité, fallback legacy ──────────
   const reference   = extra.reference || order.orderNumber;
   const deadlineTxt = deadlineLabel(extra.deadline ?? order.notes);
   const dtfSize     = extra.coteLogoAr ?? null;
 
-  // Visuels : codes DTF ou images uploadées localement
   const logoAvant   = extra.logoAvant   ?? images[0] ?? null;
   const logoArriere = extra.logoArriere ?? images[1] ?? null;
 
@@ -184,11 +149,6 @@ function OrderFicheModal({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-[3px]"
       onClick={onClose}
     >
-      {/*
-        CSS @media print — isole uniquement la fiche autocollant.
-        "visibility: hidden" sur body masque tout sauf .olda-fiche-print
-        sans retirer les éléments du flux (évite les sauts de mise en page).
-      */}
       <style>{`
         @media print {
           body * { visibility: hidden !important; }
@@ -208,7 +168,7 @@ function OrderFicheModal({
         style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── Toolbar ── */}
+        {/* Toolbar */}
         <div className="sticky top-0 z-10 bg-white flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">
@@ -219,7 +179,6 @@ function OrderFicheModal({
             </h2>
           </div>
           <div className="flex items-center gap-2">
-            {/* Bouton impression */}
             <button
               onClick={() => window.print()}
               className="h-8 w-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-blue-50 hover:text-blue-600 transition-colors"
@@ -236,34 +195,14 @@ function OrderFicheModal({
           </div>
         </div>
 
-        {/* ══ FICHE AUTOCOLLANT — seul ce bloc est imprimé (@media print) ══════ */}
+        {/* ══ FICHE AUTOCOLLANT ════════════════════════════════════════════════ */}
         <div className="olda-fiche-print px-5 pt-5 pb-4">
           <div className="flex items-start gap-5">
-
-            {/* ─ Gauche : 6 lignes dans l'ordre exact ─ */}
             <div className="flex-1 space-y-[6px] min-w-0">
-
-              {/* L1 — "Bon de Commande" */}
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                Bon de Commande
-              </p>
-
-              {/* L2 — Référence produit */}
-              <p className="text-[17px] font-bold text-gray-900 truncate leading-tight">
-                {reference}
-              </p>
-
-              {/* L3 — Prénom Nom */}
-              <p className="text-[14px] font-semibold text-gray-800 truncate">
-                {order.customerName}
-              </p>
-
-              {/* L4 — Téléphone */}
-              <p className="text-[13px] text-gray-600 truncate">
-                {order.customerPhone ?? "—"}
-              </p>
-
-              {/* L5 — Deadline + jours restants */}
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Bon de Commande</p>
+              <p className="text-[17px] font-bold text-gray-900 truncate leading-tight">{reference}</p>
+              <p className="text-[14px] font-semibold text-gray-800 truncate">{order.customerName}</p>
+              <p className="text-[13px] text-gray-600 truncate">{order.customerPhone ?? "—"}</p>
               <p className={cn(
                 "text-[12px] font-medium truncate flex items-center gap-1",
                 deadlineTxt?.includes("retard") ? "text-red-500" : "text-gray-700"
@@ -273,29 +212,19 @@ function OrderFicheModal({
                   : <span className="text-gray-300">Deadline : —</span>
                 }
               </p>
-
-              {/* L6 — Taille DTF Arrière (fiche.coteLogoAr) */}
               <p className="text-[12px] text-gray-500 truncate">
                 <span className="font-medium text-gray-400">DTF AR : </span>
                 {dtfSize ?? (isDtfCode(logoArriere) ? logoArriere : "—")}
               </p>
             </div>
 
-            {/* ─ Droite : QR Code ─ */}
             {origin && (
               <div className="shrink-0 rounded-xl border border-gray-200 p-[5px] bg-white shadow-sm">
-                <QRCodeSVG
-                  value={qrValue}
-                  size={96}
-                  bgColor="#ffffff"
-                  fgColor="#1d1d1f"
-                  level="M"
-                />
+                <QRCodeSVG value={qrValue} size={96} bgColor="#ffffff" fgColor="#1d1d1f" level="M" />
               </div>
             )}
           </div>
 
-          {/* Pastille paiement dans la fiche */}
           <div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-100">
             <PaymentDot status={order.paymentStatus} />
             <span className="text-[11px] text-gray-400">
@@ -306,13 +235,11 @@ function OrderFicheModal({
             </span>
           </div>
         </div>
-        {/* ══ fin bloc @media print ═════════════════════════════════════════════ */}
+        {/* ══ fin fiche ════════════════════════════════════════════════════════ */}
 
-        {/* ── Visuels (logos DTF) ── */}
+        {/* Visuels */}
         <div className="px-5 pt-3 pb-4 bg-gray-50 border-t border-gray-100">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2.5">
-            Visuels
-          </p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2.5">Visuels</p>
           {(logoAvant || logoArriere) ? (
             <div className="flex gap-3">
               {([
@@ -321,23 +248,14 @@ function OrderFicheModal({
               ] as { src: string | null; label: string }[]).map(({ src, label }) =>
                 src ? (
                   <div key={label} className="flex-1 flex flex-col items-center gap-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                      {label}
-                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</span>
                     {isDtfCode(src) ? (
-                      /* Code DTF référence — affiché comme tag monospace */
                       <div className="w-full flex items-center justify-center h-16 rounded-2xl border border-gray-200 bg-white font-mono text-[13px] font-semibold text-gray-700 shadow-sm px-2 text-center">
                         {src}
                       </div>
                     ) : (
-                      /* Image uploadée localement ou URL */
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={src}
-                        alt={`Visual ${label}`}
-                        className="w-full object-contain rounded-2xl border border-gray-200 bg-white shadow-sm"
-                        style={{ maxHeight: 180 }}
-                      />
+                      <img src={src} alt={`Visual ${label}`} className="w-full object-contain rounded-2xl border border-gray-200 bg-white shadow-sm" style={{ maxHeight: 180 }} />
                     )}
                   </div>
                 ) : null
@@ -352,14 +270,12 @@ function OrderFicheModal({
           )}
         </div>
 
-        {/* ── Articles (format legacy avec prix > 0) ── */}
+        {/* Articles */}
         {items.filter(i => i.price > 0).length > 0 && (
           <div className="px-5 pt-4 pb-5">
             <div className="flex items-center gap-1.5 mb-3">
               <Package className="h-3.5 w-3.5 text-gray-400" />
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                Articles
-              </p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Articles</p>
             </div>
             <div className="space-y-2">
               {items.map((item: OrderItem) => (
@@ -398,48 +314,172 @@ function OrderFicheModal({
   );
 }
 
+// ── Modal édition ──────────────────────────────────────────────────────────────
+
+const SF = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif";
+const inputCls = "w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[14px] text-gray-900 placeholder:text-gray-300 focus:outline-none focus:border-blue-400 focus:bg-white transition-colors";
+
+function EditOrderModal({
+  order, extra, onClose, onSaved,
+}: {
+  order: Order;
+  extra: OldaExtraData;
+  onClose: () => void;
+  onSaved: (patch: OrderPatch) => void;
+}) {
+  const [name,   setName]   = useState(order.customerName ?? "");
+  const [phone,  setPhone]  = useState(order.customerPhone ?? "");
+  const [dtf,    setDtf]    = useState(extra.coteLogoAr ?? "");
+  const [notes,  setNotes]  = useState(order.notes ?? "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", fn);
+    return () => document.removeEventListener("keydown", fn);
+  }, [onClose]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const patch: OrderPatch = {
+      customerName:  name  || undefined,
+      customerPhone: phone || undefined,
+      notes,
+      coteLogoAr:    dtf   || undefined,
+    };
+    try {
+      await fetch(`/api/orders/${order.id}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerName:  patch.customerName,
+          customerPhone: patch.customerPhone,
+          notes:         patch.notes,
+          ...(patch.coteLogoAr ? { shippingAddressPatch: { coteLogoAr: patch.coteLogoAr } } : {}),
+        }),
+      });
+      onSaved(patch);
+      onClose();
+    } catch { /* ignore — card garde ses valeurs */ } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-[3px]"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm bg-white rounded-[28px] shadow-[0_24px_64px_rgba(0,0,0,0.15)] border border-gray-200/80 overflow-hidden"
+        style={{ fontFamily: SF }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
+          <h2 style={{ fontSize: 17, fontWeight: 600, color: "#1d1d1f" }}>Modifier la commande</h2>
+          <button
+            onClick={onClose}
+            className="h-7 w-7 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+          >
+            <X className="h-3.5 w-3.5 text-gray-600" />
+          </button>
+        </div>
+
+        {/* Champs */}
+        <div className="px-5 py-4 space-y-3">
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Nom complet</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Prénom Nom" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Téléphone</label>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="06 …" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Taille DTF AR</label>
+            <input value={dtf} onChange={(e) => setDtf(e.target.value)} placeholder="ex : 300 mm" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Note</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Commentaire interne…"
+              rows={3}
+              className={inputCls + " resize-none"}
+            />
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="px-5 pb-5 flex items-center gap-2.5">
+          <button
+            onClick={onClose}
+            className="flex-1 h-10 rounded-xl bg-gray-100 text-[14px] font-semibold text-gray-600 hover:bg-gray-200 transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 h-10 rounded-xl bg-gray-900 text-[14px] font-semibold text-white hover:bg-gray-700 disabled:opacity-50 transition-colors"
+          >
+            {saving ? "…" : "Enregistrer"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main card — Bulle Apple ───────────────────────────────────────────────────
 
-export function TshirtOrderCard({ order, isNew, onDelete }: { order: Order; isNew?: boolean; onDelete?: () => void }) {
+export function TshirtOrderCard({ order: initialOrder, isNew, onDelete }: {
+  order: Order;
+  isNew?: boolean;
+  onDelete?: () => void;
+}) {
+  // Local order copy pour refléter les éditions sans attendre le prochain poll SSE
+  const [order, setOrder] = useState(initialOrder);
+
   const items    = Array.isArray(order.items) ? order.items : [];
   const currency = (order.currency as string) ?? "EUR";
-  const origin     = useOrigin();
-  const activeUser = useActiveUser(); // utilisateur connecté (session 07h/13h)
+  const origin   = useOrigin();
 
-  // ── Données Olda Studio (extra data) ──────────────────────────────────────
-  const extra = readExtra(order);
+  const extra     = readExtra(order);
+  const reference = extra.reference || order.orderNumber;
 
-  // Séparation prénom / nom — convention "Prénom NOM" (1er mot = prénom)
+  // Séparation prénom / nom — convention "Prénom NOM"
   const nameParts = (order.customerName ?? "").trim().split(/\s+/);
   const prenom    = nameParts[0] ?? "";
   const nom       = nameParts.slice(1).join(" ") || prenom;
 
-  // DTF Arrière : coteLogoAr > logoArriere (code) > détection legacy depuis items
-  const dtfItem  = items.find((i) => /arrière|arriere|back|dtf/i.test(i.name ?? "") || /arrière|arriere|back|dtf/i.test(i.sku ?? ""));
-  const dtfLabel = extra.coteLogoAr ?? extra.logoArriere ?? dtfItem?.sku ?? dtfItem?.name ?? items[0]?.sku ?? null;
+  // DTF Arrière — uniquement la taille (coteLogoAr)
+  const dtfSize = extra.coteLogoAr ?? null;
 
   const serverImages  = items.filter((i) => i.imageUrl && !isDtfCode(i.imageUrl)).map((i) => i.imageUrl as string).slice(0, 2);
   const { localImages, addImage } = useLocalImages(order.id);
   const displayImages = serverImages.length > 0 ? serverImages : localImages;
 
-  const { todos, addTodo, toggleTodo, deleteTodo } = useTodos(order.id);
-  const [newText, setNewText]     = useState("");
-  const [todoOpen, setTodoOpen]   = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-
-  const pendingCount = todos.filter((t) => !t.done).length;
+  const [editOpen,  setEditOpen]  = useState(false);
 
   const qrValue = origin ? `${origin}/dashboard/orders/${order.id}` : order.orderNumber;
 
-  // Attribution utilisateur : [prenom] texte — trace qui a créé la tâche
-  const handleAddTodo = () => {
-    if (!newText.trim()) return;
-    const prefix = activeUser ? `[${activeUser}] ` : "";
-    addTodo(prefix + newText.trim());
-    setNewText("");
-  };
-  const handleTodoKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") { e.preventDefault(); handleAddTodo(); }
+  // Applique le patch localement après une édition réussie
+  const handleSaved = (patch: OrderPatch) => {
+    setOrder((prev) => {
+      const next = { ...prev };
+      if (patch.customerName  !== undefined) next.customerName  = patch.customerName;
+      if (patch.customerPhone !== undefined) next.customerPhone = patch.customerPhone;
+      if (patch.notes         !== undefined) next.notes         = patch.notes;
+      if (patch.coteLogoAr) {
+        const sa = (prev.shippingAddress as Record<string, unknown>) ?? {};
+        next.shippingAddress = { ...sa, coteLogoAr: patch.coteLogoAr, _source: "olda_studio" };
+      }
+      return next;
+    });
   };
 
   return (
@@ -448,32 +488,41 @@ export function TshirtOrderCard({ order, isNew, onDelete }: { order: Order; isNe
       <div
         className={cn(
           "relative group/card rounded-[24px] bg-white border overflow-hidden",
-          "transition-all duration-200 cursor-pointer select-none [touch-action:manipulation]",
+          "transition-all duration-200 select-none [touch-action:manipulation]",
           "shadow-[0_1px_8px_rgba(0,0,0,0.05)] hover:shadow-[0_6px_24px_rgba(0,0,0,0.09)] hover:border-gray-300",
           isNew
             ? "border-blue-400/60 ring-2 ring-blue-400/30 animate-fade-up"
             : "border-gray-200/80"
         )}
-        onClick={() => setModalOpen(true)}
       >
-        {/* ── Croix de suppression — discrète, visible au hover, Apple style ── */}
-        {onDelete && (
+        {/* ── Boutons d'action — Éditer (bleu) + Supprimer (rouge) ── */}
+        <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity duration-150">
+          {/* Éditer */}
           <button
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            title="Supprimer cette commande"
-            className={cn(
-              "absolute top-2.5 right-2.5 z-10",
-              "opacity-0 group-hover/card:opacity-100 transition-opacity duration-150",
-              "h-5 w-5 rounded-full flex items-center justify-center",
-              "bg-white border border-gray-200 shadow-sm",
-              "hover:bg-red-50 hover:border-red-300",
-            )}
+            onClick={(e) => { e.stopPropagation(); setEditOpen(true); }}
+            title="Modifier la commande"
+            className="h-5 w-5 rounded-full flex items-center justify-center bg-white border border-gray-200 shadow-sm hover:bg-blue-50 hover:border-blue-300 transition-colors"
           >
-            <X className="h-2.5 w-2.5 text-gray-400 hover:text-red-500" />
+            <Pencil className="h-2.5 w-2.5 text-gray-400" />
           </button>
-        )}
+          {/* Supprimer — confirm avant action */}
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`Supprimer la commande de ${order.customerName} ?\nCette action est irréversible.`)) {
+                  onDelete();
+                }
+              }}
+              title="Supprimer la commande"
+              className="h-5 w-5 rounded-full flex items-center justify-center bg-white border border-gray-200 shadow-sm hover:bg-red-50 hover:border-red-300 transition-colors"
+            >
+              <X className="h-2.5 w-2.5 text-gray-400" style={{ color: "#ff3b30" }} />
+            </button>
+          )}
+        </div>
 
-        {/* ══ Layout horizontal : QR gauche · Infos droite ══════════════════ */}
+        {/* ══ Layout horizontal : QR gauche · Infos droite ═══════════════════ */}
         <div
           className="flex items-stretch cursor-pointer select-none"
           onClick={() => setModalOpen(true)}
@@ -487,152 +536,77 @@ export function TshirtOrderCard({ order, isNew, onDelete }: { order: Order; isNe
             </div>
           )}
 
-          {/* ─ Colonne droite : Identité · Production · Footer ─ */}
-          <div className="flex-1 min-w-0 flex flex-col justify-between px-3 py-3 gap-3">
+          {/* ─ Colonne droite : Identité · Production · Prix ─ */}
+          <div className="flex-1 min-w-0 flex flex-col justify-between px-3 py-3 gap-2.5">
 
-            {/* ── Bloc Identité ── */}
+            {/* Bloc Identité */}
             <div className="flex flex-col gap-[3px]">
-              {/* NOM — majuscules, semibold */}
-              <p
-                className="truncate leading-tight"
-                style={{ fontSize: 15, fontWeight: 600, letterSpacing: "0.02em", color: "#1d1d1f", textTransform: "uppercase" }}
-              >
+              {/* NOM — uppercase semibold */}
+              <p className="truncate leading-tight" style={{ fontSize: 15, fontWeight: 600, letterSpacing: "0.02em", color: "#1d1d1f", textTransform: "uppercase" }}>
                 {nom}
               </p>
               {/* Prénom — regular */}
-              <p
-                className="truncate leading-tight"
-                style={{ fontSize: 14, fontWeight: 400, color: "#3a3a3c" }}
-              >
+              <p className="truncate leading-tight" style={{ fontSize: 14, fontWeight: 400, color: "#3a3a3c" }}>
                 {prenom}
               </p>
-              {/* Téléphone — gris Apple secondaire */}
-              <p
-                className="truncate"
-                style={{ fontSize: 12, color: "#8e8e93" }}
-              >
+              {/* Téléphone */}
+              <p className="truncate" style={{ fontSize: 12, color: "#8e8e93" }}>
                 {order.customerPhone ?? "—"}
               </p>
+              {/* Référence — juste sous le téléphone, monospace discret */}
+              <p className="truncate font-mono" style={{ fontSize: 10, color: "#aeaeb2" }}>
+                {reference}
+              </p>
             </div>
 
-            {/* ── Bloc Production — DTF AR (le plus important) ── */}
+            {/* Bloc Production — DTF AR (le plus important) */}
             <div>
-              <p
-                className="truncate mb-0.5"
-                style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#aeaeb2" }}
-              >
+              <p className="truncate mb-0.5" style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#aeaeb2" }}>
                 DTF AR
               </p>
-              <p
-                className="truncate"
-                style={{ fontSize: 18, fontWeight: 700, color: "#333333", lineHeight: 1.15 }}
-              >
-                {dtfLabel ?? "—"}
+              <p className="truncate" style={{ fontSize: 18, fontWeight: 700, color: "#333333", lineHeight: 1.15 }}>
+                {dtfSize ?? "—"}
               </p>
             </div>
 
-            {/* ── Bloc Footer : commentaire + prix ── */}
-            <div className="flex items-end justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                {order.notes && (
-                  <p
-                    className="truncate"
-                    style={{ fontSize: 11, fontStyle: "italic", color: "#8e8e93" }}
-                  >
-                    {order.notes}
-                  </p>
-                )}
-              </div>
-              {/* Prix — couleur conditionnelle paiement */}
-              <p
-                className="shrink-0 tabular-nums"
-                style={{
-                  fontSize: 15,
-                  fontWeight: 700,
-                  color: order.paymentStatus === "PAID" ? "#28cd41" : "#ff3b30",
-                }}
-              >
-                {fmtPrice(order.total, currency)}
-              </p>
-            </div>
+            {/* Prix — couleur paiement Apple */}
+            <p className="tabular-nums" style={{
+              fontSize: 15,
+              fontWeight: 700,
+              color: order.paymentStatus === "PAID" ? "#28cd41" : "#ff3b30",
+            }}>
+              {fmtPrice(order.total, currency)}
+            </p>
 
           </div>
         </div>
 
-        {/* ── Tâches (stop propagation — ne déclenche pas le modal) ── */}
-        <div
-          className="border-t border-gray-100 px-3 pt-2 pb-2"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            onClick={() => setTodoOpen((v) => !v)}
-            className="w-full min-h-[44px] flex items-center justify-between group"
+        {/* ── Section Note — affichée uniquement si order.notes existe ── */}
+        {order.notes && (
+          <div
+            className="border-t border-gray-100 px-3 py-2.5"
+            onClick={(e) => e.stopPropagation()}
           >
-            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 group-hover:text-gray-600 transition-colors">
-              Tâches
-            </span>
-            <span className="flex items-center gap-1.5">
-              {todos.length > 0 && (
-                <span className={cn(
-                  "rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none",
-                  pendingCount > 0 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
-                )}>
-                  {pendingCount}/{todos.length}
-                </span>
-              )}
-              <span className="text-[10px] text-gray-300">{todoOpen ? "▴" : "▾"}</span>
-            </span>
-          </button>
-
-          {todoOpen && (
-            <div className="space-y-0.5">
-              {todos.map((todo) => (
-                <div
-                  key={todo.id}
-                  className="group/item flex items-center gap-2 rounded-lg px-1 py-0.5 -mx-1 hover:bg-gray-50 transition-colors"
-                >
-                  <button
-                    onClick={() => toggleTodo(todo.id)}
-                    className={cn(
-                      "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-all duration-150",
-                      todo.done ? "border-amber-500 bg-amber-500" : "border-gray-300 hover:border-amber-400"
-                    )}
-                  >
-                    {todo.done && <Check className="h-2 w-2 text-white" strokeWidth={3.5} />}
-                  </button>
-                  <span className={cn(
-                    "flex-1 text-[12px] leading-relaxed select-text",
-                    todo.done ? "line-through text-gray-300" : "text-gray-700"
-                  )}>
-                    {todo.text}
-                  </span>
-                  <button onClick={() => deleteTodo(todo.id)} className="opacity-0 group-hover/item:opacity-100 transition-opacity">
-                    <X className="h-2.5 w-2.5 text-gray-400" />
-                  </button>
-                </div>
-              ))}
-
-              {/* Ajouter — préfixé [utilisateur connecté] */}
-              <div className="flex items-center gap-2 rounded-lg px-1 py-0.5 -mx-1 hover:bg-gray-50 transition-colors">
-                <button
-                  onClick={handleAddTodo}
-                  className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 transition-all"
-                >
-                  <Plus className="h-2 w-2 text-gray-400" />
-                </button>
-                <input
-                  value={newText}
-                  onChange={(e) => setNewText(e.target.value)}
-                  onKeyDown={handleTodoKey}
-                  placeholder={activeUser ? `Tâche pour ${activeUser}…` : "Ajouter une tâche…"}
-                  className="flex-1 bg-transparent text-[12px] text-gray-700 placeholder:text-gray-300 focus:outline-none"
-                />
-              </div>
-            </div>
-          )}
-        </div>
+            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#aeaeb2", marginBottom: 3 }}>
+              Note
+            </p>
+            <p style={{ fontSize: 12, color: "#8e8e93", fontStyle: "italic", lineHeight: 1.45 }}>
+              {order.notes}
+            </p>
+          </div>
+        )}
 
       </div>
+
+      {/* ── Modal édition ── */}
+      {editOpen && (
+        <EditOrderModal
+          order={order}
+          extra={extra}
+          onClose={() => setEditOpen(false)}
+          onSaved={handleSaved}
+        />
+      )}
 
       {/* ── Modal fiche de commande ── */}
       {modalOpen && (
