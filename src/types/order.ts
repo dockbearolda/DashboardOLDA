@@ -68,12 +68,19 @@ export interface OrderStats {
 
 /** Champs extra stockés dans shippingAddress (JSONB) pour les commandes Olda Studio */
 export interface OldaExtraData {
-  reference?: string;       // Référence produit (ex: "PACK-NOIR-L")
-  logoAvant?: string;       // Code fichier DTF avant (finit par "AV")
-  logoArriere?: string;     // Code fichier DTF arrière (finit par "AR")
-  deadline?: string;        // Date limite (ISO 8601 ou texte lisible)
-  coteLogoAr?: string;      // Taille DTF arrière (ex: "A4", "A3 +5cm")
-  _source?: "olda_studio";  // Marqueur d'origine — ne pas modifier
+  reference?: string;            // Référence produit (ex: "H-001 · NS300")
+  logoAvant?: string;            // Code fichier DTF avant (finit par "AV")
+  logoArriere?: string;          // Code fichier DTF arrière (finit par "AR")
+  deadline?: string;             // Date limite (ISO 8601 ou texte lisible)
+  coteLogoAr?: string;           // Taille DTF arrière (ex: "A4", "270 mm")
+  _source?: "olda_studio";       // Marqueur d'origine — ne pas modifier
+  // Champs produit supplémentaires
+  collection?: string;           // ex: "Homme", "Femme", "Enfant"
+  coloris?: string;              // ex: "Noir", "Blanc", "Rouge"
+  taille?: string;               // ex: "M", "L", "XL"
+  // Couleurs logos
+  couleurLogoAvant?: string;     // ex: "Rose", "Blanc"
+  couleurLogoArriere?: string;   // ex: "Argent", "Or"
 }
 
 /** Payload JSON envoyé directement par Olda Studio vers POST /api/orders */
