@@ -248,17 +248,36 @@ function KanbanColumn({
   col,
   orders,
   newOrderIds,
+  onDropOrder,
 }: {
   col: KanbanCol;
   orders: Order[];
   newOrderIds?: Set<string>;
+  onDropOrder?: (orderId: string, newStatus: OrderStatus) => void;
 }) {
-  return (
-    // Mobile: full viewport width with snap point so user swipes column-by-column
-    // md+: fixed 272 px column in a free-scrolling horizontal list
-    <div className="snap-start shrink-0 w-[88vw] sm:w-[80vw] md:w-[272px] flex flex-col gap-2">
+  const [isDragOver, setIsDragOver] = useState(false);
 
-      {/* Status bubble / column header */}
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const orderId = e.dataTransfer.getData("orderId");
+    if (orderId && onDropOrder) {
+      onDropOrder(orderId, col.status);
+    }
+  };
+
+  return (
+    <div className="snap-start shrink-0 w-[88vw] sm:w-[80vw] md:w-[272px] flex flex-col gap-2">
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm px-3 py-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", col.dot)} />
@@ -271,15 +290,32 @@ function KanbanColumn({
         </span>
       </div>
 
-      {/* Cards */}
-      <div className="flex flex-col gap-2">
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={cn(
+          "flex flex-col gap-2 p-2 rounded-lg transition-all",
+          isDragOver ? "bg-blue-50 border-2 border-blue-300 shadow-md" : ""
+        )}
+      >
         {orders.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-200 h-14 flex items-center justify-center">
             <span className="text-[12px] text-gray-300">vide</span>
           </div>
         ) : (
           orders.map((o) => (
-            <TshirtOrderCard key={o.id} order={o} isNew={newOrderIds?.has(o.id)} />
+            <div
+              key={o.id}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("orderId", o.id);
+              }}
+              className="cursor-grab active:cursor-grabbing"
+            >
+              <TshirtOrderCard order={o} isNew={newOrderIds?.has(o.id)} />
+            </div>
           ))
         )}
       </div>
@@ -293,32 +329,31 @@ function KanbanBoard({
   columns,
   orders,
   newOrderIds,
+  onUpdateOrder,
 }: {
   columns: KanbanCol[];
   orders: Order[];
   newOrderIds?: Set<string>;
+  onUpdateOrder?: (orderId: string, newStatus: OrderStatus) => void;
 }) {
   const ordersByStatus = useMemo(() => {
     const map: Record<string, Order[]> = {};
     for (const col of columns) map[col.status] = [];
     for (const order of orders) {
       if (map[order.status] !== undefined) map[order.status].push(order);
-      else map[columns[0].status].push(order); // fallback → first column
+      else map[columns[0].status].push(order);
     }
     return map;
   }, [columns, orders]);
 
+  const handleDropOrder = (orderId: string, newStatus: OrderStatus) => {
+    if (onUpdateOrder) {
+      onUpdateOrder(orderId, newStatus);
+    }
+    updateOrderStatus(orderId, newStatus);
+  };
+
   return (
-    /*
-     * Two-layer scroll — iOS Safari:
-     *   outer: block + overflow-x-auto = reliable scroll container.
-     *   inner: flex + w-max = explicit intrinsic width (WebKit needs this).
-     * CRITICAL: scroll-snap-type goes on the SCROLL CONTAINER (outer), not
-     * the flex child. Placing snap-x on a non-scroll element is undefined
-     * behaviour in WebKit and causes the scrollport to collapse to zero.
-     * overflow-x-clip on OldaBoard root prevents page bleed without creating
-     * a competing scroll context (unlike overflow-x-hidden).
-     */
     <div className={cn(
       "w-full overflow-x-auto no-scrollbar pb-safe-6",
       "snap-x snap-mandatory md:snap-none",
@@ -330,6 +365,7 @@ function KanbanBoard({
             col={col}
             orders={ordersByStatus[col.status] ?? []}
             newOrderIds={newOrderIds}
+            onDropOrder={handleDropOrder}
           />
         ))}
       </div>
@@ -351,6 +387,20 @@ function LiveIndicator({ connected }: { connected: boolean }) {
       </span>
     </div>
   );
+}
+
+// ── Drag & Drop: Update order status ───────────────────────────────────────────
+
+async function updateOrderStatus(orderId: string, newStatus: OrderStatus): Promise<void> {
+  try {
+    await fetch(`/api/orders/${orderId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
+  } catch (err) {
+    console.error("Failed to update order status:", err);
+  }
 }
 
 // ── Main export ────────────────────────────────────────────────────────────────
@@ -551,6 +601,13 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
 
   const notesMap = Object.fromEntries(PEOPLE.map((p) => [p.key, notes[p.key]?.todos ?? []]));
 
+  // Handle order status update (optimistic UI)
+  const handleUpdateOrder = useCallback((orderId: string, newStatus: OrderStatus) => {
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+    );
+  }, []);
+
   // Select orders for active tab
   const activeOrders = activeTab === "tshirt" ? tshirt : activeTab === "mug" ? mug : other;
 
@@ -635,6 +692,7 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
           columns={TSHIRT_COLUMNS}
           orders={activeOrders}
           newOrderIds={newOrderIds}
+          onUpdateOrder={handleUpdateOrder}
         />
       </div>
 
