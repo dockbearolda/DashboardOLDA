@@ -147,13 +147,13 @@ export function OrderDetail({ order: initialOrder }: OrderDetailProps) {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Client</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex justify-between items-center text-sm">
+        <CardContent className="p-0">
+          <div className="flex justify-between items-center text-sm border-b border-gray-100 py-3 px-6">
             <span className="text-muted-foreground">Nom</span>
             <span className="font-medium">{order.customerName}</span>
           </div>
           {order.customerPhone && (
-            <div className="flex justify-between items-center text-sm">
+            <div className="flex justify-between items-center text-sm border-b border-gray-100 py-3 px-6">
               <span className="text-muted-foreground">Téléphone</span>
               <a href={`tel:${order.customerPhone}`} className="font-medium hover:text-foreground">
                 {order.customerPhone}
@@ -161,7 +161,7 @@ export function OrderDetail({ order: initialOrder }: OrderDetailProps) {
             </div>
           )}
           {extra?.deadline && (
-            <div className="flex justify-between items-center text-sm">
+            <div className="flex justify-between items-center text-sm py-3 px-6">
               <span className="text-muted-foreground">Deadline</span>
               <span className="font-medium">{extra.deadline}</span>
             </div>
@@ -175,15 +175,15 @@ export function OrderDetail({ order: initialOrder }: OrderDetailProps) {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm">Produit</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="p-0">
             {extra?.reference && (
-              <div className="flex justify-between items-center text-sm">
+              <div className="flex justify-between items-center text-sm border-b border-gray-100 py-3 px-6">
                 <span className="text-muted-foreground">Référence</span>
                 <span className="font-medium font-mono">{extra.reference}</span>
               </div>
             )}
             {extra?.coteLogoAr && (
-              <div className="flex justify-between items-center text-sm">
+              <div className="flex justify-between items-center text-sm py-3 px-6">
                 <span className="text-muted-foreground">Taille DTF Arrière</span>
                 <span className="font-medium">{extra.coteLogoAr}</span>
               </div>
@@ -198,15 +198,15 @@ export function OrderDetail({ order: initialOrder }: OrderDetailProps) {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm">Logos</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="p-0">
             {extra.logoAvant && (
-              <div className="flex justify-between items-center text-sm">
+              <div className="flex justify-between items-center text-sm border-b border-gray-100 py-3 px-6">
                 <span className="text-muted-foreground">Logo Avant</span>
                 <span className="font-medium font-mono">{extra.logoAvant}</span>
               </div>
             )}
             {extra.logoArriere && (
-              <div className="flex justify-between items-center text-sm">
+              <div className="flex justify-between items-center text-sm py-3 px-6">
                 <span className="text-muted-foreground">Logo Arrière</span>
                 <span className="font-medium font-mono">{extra.logoArriere}</span>
               </div>
@@ -232,19 +232,18 @@ export function OrderDetail({ order: initialOrder }: OrderDetailProps) {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Paiement</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {order.items.map(item => (
-            <div key={item.id} className="flex justify-between items-center text-sm">
+        <CardContent className="p-0">
+          {order.items.map((item, idx) => (
+            <div key={item.id} className={`flex justify-between items-center text-sm py-3 px-6 ${idx < order.items.length - 1 ? "border-b border-gray-100" : ""}`}>
               <span className="text-muted-foreground">{item.name}</span>
               <span>{formatCurrency(item.price * item.quantity, order.currency)}</span>
             </div>
           ))}
-          <Separator />
-          <div className="flex justify-between items-center text-sm font-bold">
+          <div className="flex justify-between items-center text-sm font-bold border-t border-gray-200 py-3 px-6">
             <span>Total</span>
             <span>{formatCurrency(order.total, order.currency)}</span>
           </div>
-          <div className="flex justify-between items-center text-sm mt-2">
+          <div className="flex justify-between items-center text-sm border-b border-gray-100 py-3 px-6">
             <span className="text-muted-foreground">Statut</span>
             <PaymentStatusBadge status={order.paymentStatus} />
           </div>
