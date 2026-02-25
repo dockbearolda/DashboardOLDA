@@ -16,7 +16,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
-import { Pencil } from "lucide-react";
+import { Plus, Trash2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TodoItem } from "./person-note-modal";
 
@@ -255,41 +255,39 @@ function ReminderCard({
   return (
     <div
       className={cn(
-        "rounded-2xl bg-white border shadow-sm p-3 md:p-4",
-        "flex flex-col min-h-[96px] md:min-h-[110px]",
+        "rounded-[18px] bg-white border shadow-sm p-3.5 md:p-4",
+        "flex flex-col min-h-[200px]",
         "transition-all duration-200",
-        isActive   ? "border-blue-300/70 shadow-blue-100/60" : "border-gray-200",
-        isDragOver ? "border-blue-400 bg-blue-50/30 scale-[1.01] shadow-blue-100" : ""
+        isActive   ? "border-blue-300/70 shadow-blue-100/60 bg-blue-50/30" : "border-gray-100",
+        isDragOver ? "border-blue-400 bg-blue-50/50 scale-[1.02] shadow-md" : ""
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      style={{
+        fontFamily: "'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
+        WebkitFontSmoothing: "antialiased",
+        MozOsxFontSmoothing: "grayscale",
+      }}
     >
       {/* ── Header ── */}
-      <div className="flex items-center justify-between mb-2 md:mb-3">
-        <span className="flex items-center gap-1.5">
-          {isActive && <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />}
-          <span className={cn(
-            "text-[14px] md:text-[15px] tracking-tight",
-            isActive ? "font-bold text-gray-900" : "font-semibold text-gray-900"
-          )}>
-            {personName}
-          </span>
+      <div className="flex items-center gap-2.5 mb-3">
+        {isActive && <span className="h-2.5 w-2.5 rounded-full bg-blue-500 shrink-0" />}
+        <span className={cn(
+          "text-xs font-bold text-gray-900 uppercase tracking-wider",
+          isActive && "text-blue-600"
+        )}>
+          {personName}
         </span>
-        {/* Crayon = ajouter */}
-        <button
-          onClick={openAdd}
-          aria-label="Ajouter un rappel"
-          className="flex items-center justify-center -mr-1.5 -mt-1 h-[44px] w-[44px] rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-        >
-          <Pencil size={13} strokeWidth={1.8} />
-        </button>
+        <span className="text-xs font-semibold text-gray-500 ml-auto px-2.5 py-1 rounded-full bg-gray-100">
+          {todos.length}
+        </span>
       </div>
 
       {/* ── Liste des todos ── */}
-      <div className="flex flex-col gap-1.5">
+      <div className="flex-1 flex flex-col gap-2">
         {todos.length === 0 && !isAdding && (
-          <p className="text-[13px] italic text-gray-300 pl-[22px]">Aucun rappel…</p>
+          <p className="text-[13px] italic text-gray-300 py-6 text-center">Aucune tâche</p>
         )}
 
         {todos.map((todo) => (
@@ -300,23 +298,26 @@ function ReminderCard({
           >
             <div
               className={cn(
-                "flex items-center gap-2 w-full rounded-md -mx-1 px-1 py-[3px]",
-                "transition-colors",
-                editingId !== todo.id && "cursor-grab active:cursor-grabbing hover:bg-gray-50",
+                "flex items-center gap-2.5 w-full rounded-[14px] px-3 py-2.5 bg-white border border-gray-100",
+                "transition-all",
+                editingId !== todo.id && "cursor-grab active:cursor-grabbing hover:border-gray-200 hover:shadow-sm group",
               )}
               draggable={editingId !== todo.id}
               onDragStart={(e) => handleDragStart(e, todo)}
             >
-            {/* Cercle toggle ✓ */}
-            <button
+            {/* Dot toggle ✓ avec animation */}
+            <motion.button
               onClick={(e) => { e.stopPropagation(); toggle(todo.id); }}
+              whileTap={{ scale: 0.85 }}
               className={cn(
-                "shrink-0 h-[14px] w-[14px] rounded-full border transition-all duration-200",
+                "shrink-0 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-all duration-200",
                 todo.done
-                  ? "bg-gray-300 border-gray-300"
-                  : "border-gray-300 hover:border-gray-500"
+                  ? "bg-green-500 border-green-500"
+                  : "border-gray-300 hover:border-green-500 hover:bg-green-50"
               )}
-            />
+            >
+              {todo.done && <Check className="h-3 w-3 text-white" />}
+            </motion.button>
 
             {/* Texte ou input inline */}
             {editingId === todo.id ? (
@@ -329,28 +330,44 @@ function ReminderCard({
                   if (e.key === "Escape") { setEditingId(null); setEditText(""); }
                 }}
                 onBlur={commitEdit}
-                className="flex-1 text-[14px] text-gray-700 bg-transparent outline-none border-b border-blue-400 pb-px"
+                className="flex-1 text-sm font-medium text-gray-900 bg-transparent outline-none border-b border-blue-400"
               />
             ) : (
               <span
                 onClick={() => handleItemClick(todo)}
                 className={cn(
-                  "flex-1 text-[14px] leading-snug select-none",
-                  todo.done ? "line-through text-gray-300" : "text-gray-700"
+                  "flex-1 text-sm font-medium select-none cursor-text hover:text-gray-700 transition-colors",
+                  todo.done ? "line-through text-gray-400" : "text-gray-900"
                 )}
-                title="Clic → éditer · Double-clic → supprimer · Glisser → déplacer"
               >
                 {todo.text}
               </span>
             )}
+
+            {/* Quick delete button (visible on hover) */}
+            {editingId !== todo.id && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.8 }}
+                whileHover={{ opacity: 1, scale: 1 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdate(todos.filter(t => t.id !== todo.id));
+                }}
+                className="shrink-0 p-1 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+              >
+                <Trash2 className="h-4 w-4" />
+              </motion.button>
+            )}
             </div>
           </SwipeableTodoRow>
         ))}
+      </div>
 
-        {/* Input ajout rapide */}
-        {isAdding && (
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="shrink-0 h-[14px] w-[14px] rounded-full border border-gray-200" />
+      {/* Input ajout rapide */}
+      <div className="mt-auto pt-3 border-t border-gray-100">
+        {isAdding ? (
+          <div className="flex items-center gap-2.5">
+            <span className="shrink-0 h-5 w-5 rounded-full border-2 border-gray-200" />
             <input
               ref={addInputRef}
               value={draft}
@@ -360,10 +377,18 @@ function ReminderCard({
                 if (e.key === "Escape") { setIsAdding(false); setDraft(""); }
               }}
               onBlur={() => { commitDraft(); setIsAdding(false); }}
-              placeholder="Nouveau rappel…"
-              className="flex-1 text-[14px] text-gray-700 placeholder:text-gray-300 bg-transparent outline-none"
+              placeholder="Nouvelle tâche..."
+              className="flex-1 text-sm text-gray-700 placeholder:text-gray-400 bg-transparent outline-none"
             />
           </div>
+        ) : (
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-2.5 w-full text-sm font-medium text-gray-500 hover:text-gray-700 px-3 py-2 rounded-[14px] hover:bg-gray-50 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Ajouter une tâche
+          </button>
         )}
       </div>
     </div>
