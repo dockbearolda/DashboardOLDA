@@ -68,59 +68,79 @@ export interface OrderStats {
 
 /** Champs extra stockés dans shippingAddress (JSONB) pour les commandes Olda Studio */
 export interface OldaExtraData {
-  reference?: string;            // Référence produit (ex: "H-001 · NS300")
-  logoAvant?: string;            // Code fichier DTF avant (finit par "AV")
-  logoArriere?: string;          // Code fichier DTF arrière (finit par "AR")
-  deadline?: string;             // Date limite (ISO 8601 ou texte lisible)
-  coteLogoAr?: string;           // Taille DTF arrière (ex: "A4", "270 mm")
-  _source?: "olda_studio";       // Marqueur d'origine — ne pas modifier
-  // Champs produit
-  collection?: string;           // ex: "Homme", "Femme", "Enfant"
-  coloris?: string;              // ex: "Noir", "Blanc", "Rouge"
-  taille?: string;               // ex: "M", "L", "XL"
-  typeProduit?: string;          // ex: "T-Shirt Premium", "Polo"
-  // Couleurs logos
-  couleurLogoAvant?: string;     // ex: "Rose", "Blanc"
-  couleurLogoArriere?: string;   // ex: "Argent", "Or"
-  // Bloc PRT (pressage)
-  prt?: {
-    type?: string;               // ex: "Plastisol", "Sublimation"
-    refPrt?: string;             // ex: "PRT-001"
-    taillePrt?: string;          // ex: "A4", "A3"
-    quantite?: string;           // ex: "50"
-    statutPrt?: string;          // ex: "En attente", "Programmé"
+  // ── Identité commande ──
+  commande?: string;           // Order ID unique
+  nom?: string;                // Full name (last name or full)
+  prenom?: string;             // First name
+  telephone?: string;
+
+  // ── Deadline → limit (renamed) ──
+  limit?: string;              // Date limite (ISO 8601 ou texte lisible)
+
+  // ── Références & détails ──
+  collection?: string;
+  reference?: string;          // Référence produit (ex: "PACK-NOIR-L")
+  taille?: string;             // Taille générale
+  note?: string;               // Notes supplémentaires
+
+  // ── Fiche (visuel + spécifications) ──
+  fiche?: {
+    visuelAvant?: string;      // Image ou code DTF avant
+    visuelArriere?: string;    // Image ou code DTF arrière
+    tailleDTFAr?: string;      // Taille DTF arrière (ex: "A4", "A3 +5cm")
+    typeProduit?: string;      // Type de produit (T-shirt, etc.)
+    couleur?: string;          // Couleur
   };
+
+  // ── Impression (PRT) ──
+  prt?: {
+    refPrt?: string;           // Référence impression
+    taillePrt?: string;        // Taille impression
+    quantite?: number;         // Quantité
+  };
+
+  // ── Paiement ──
+  paiement?: {
+    statut?: "OUI" | "NON" | "PAID" | "PENDING";  // OUI = PAID, NON = PENDING
+  };
+
+  // ── Prix (en centimes) ──
+  prix?: {
+    total?: number;            // Montant total en centimes
+  };
+
+  // ── Marqueur d'origine ──
+  _source?: "olda_studio";     // Ne pas modifier
 }
 
 /** Payload JSON envoyé directement par Olda Studio vers POST /api/orders */
 export interface OldaCommandePayload {
   commande: string;          // ID unique de la commande (= orderNumber)
   nom: string;               // Prénom Nom du client
+  prenom?: string;           // First name (extracted or provided)
   telephone?: string;
+  collection?: string;
   reference?: string;        // Référence produit
-  logoAvant?: string;        // Finit par "AV"
-  logoArriere?: string;      // Finit par "AR"
-  deadline?: string;         // Date limite
+  taille?: string;
+  note?: string;
+  limit?: string;            // Date limite (renamed from deadline)
   fiche?: {
-    coteLogoAr?: string;     // Taille DTF arrière
+    visuelAvant?: string;
+    visuelArriere?: string;
+    tailleDTFAr?: string;    // Taille DTF arrière
+    typeProduit?: string;
+    couleur?: string;
+  };
+  prt?: {
+    refPrt?: string;
+    taillePrt?: string;
+    quantite?: number;
   };
   prix?: {
-    total?: number;
+    total?: number;          // En centimes
   };
   paiement?: {
     statut?: "OUI" | "NON";  // OUI = PAID, NON = PENDING
-  };
-  // Champs extra produit (passés dans shippingAddress)
-  collection?: string;
-  coloris?: string;
-  taille?: string;
-  typeProduit?: string;
-  prt?: {
-    type?: string;
-    refPrt?: string;
-    taillePrt?: string;
-    quantite?: string;
-    statutPrt?: string;
   };
 }
 
