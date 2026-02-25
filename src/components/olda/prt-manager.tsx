@@ -43,7 +43,10 @@ export function PRTManager({ items, onItemsChange }: PRTManagerProps) {
   const [isAddingNew, setIsAddingNew] = useState(false);
 
   const sortedItems = useMemo(
-    () => [...items].sort((a, b) => a.position - b.position),
+    () => {
+      if (!Array.isArray(items)) return [];
+      return [...items].sort((a, b) => (a?.position ?? 0) - (b?.position ?? 0));
+    },
     [items]
   );
 
@@ -209,7 +212,9 @@ export function PRTManager({ items, onItemsChange }: PRTManagerProps) {
                 Aucune demande PRT
               </motion.div>
             ) : (
-              sortedItems.map((item) => (
+              sortedItems.map((item) => {
+                if (!item?.id) return null;
+                return (
                 <Reorder.Item key={item.id} value={item} as="div">
                   <motion.div
                     layout
@@ -219,7 +224,7 @@ export function PRTManager({ items, onItemsChange }: PRTManagerProps) {
                     className={cn(
                       "grid gap-0 border-b border-gray-100 transition-all group hover:bg-gray-50",
                       GRID_COLS,
-                      item.done && "opacity-50"
+                      item?.done && "opacity-50"
                     )}
                   >
                     {/* Checkbox (40px) */}
@@ -425,7 +430,7 @@ export function PRTManager({ items, onItemsChange }: PRTManagerProps) {
                         whileTap={{ scale: 0.95 }}
                         className={cn(
                           "p-1.5 rounded-lg transition-all",
-                          item.done
+                          item?.done
                             ? "text-green-600 bg-green-50"
                             : "text-gray-400 hover:text-green-600 hover:bg-green-50"
                         )}
@@ -445,7 +450,8 @@ export function PRTManager({ items, onItemsChange }: PRTManagerProps) {
                     </div>
                   </motion.div>
                 </Reorder.Item>
-              ))
+                );
+              })
             )}
           </AnimatePresence>
         </Reorder.Group>
