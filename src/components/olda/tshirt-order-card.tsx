@@ -10,6 +10,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import { X, Upload, Printer, Pencil, ChevronDown } from "lucide-react";
 import { format, differenceInCalendarDays } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -508,20 +509,63 @@ export function TshirtOrderCard({ order: initialOrder, isNew, onDelete, compact 
     });
   };
 
+  // ── Swipe-to-dismiss (Apple-style) ──────────────────────────────────────────
+  const cardRef = useRef<HTMLDivElement>(null);
+  const x = useMotionValue(0);
+  const opacity = useTransform(x, [-150, 0, 150], [0.3, 1, 0.3]);
+  const bgOpacity = useTransform(
+    x,
+    [-150, -30, 0, 30, 150],
+    [0.15, 0.06, 0, 0.06, 0.15]
+  );
+
+  const handleCardDragEnd = (_: any, info: any) => {
+    const cardWidth = cardRef.current?.offsetWidth ?? 300;
+    const threshold = cardWidth * 0.5;
+    const offset = info.offset.x;
+
+    if (onDelete && Math.abs(offset) > threshold) {
+      // Seuil atteint → suppression
+      navigator.vibrate?.(40);
+      animate(x, offset > 0 ? 800 : -800, { duration: 0.2 });
+      setTimeout(onDelete, 180);
+    } else {
+      // Ressort de retour
+      animate(x, 0, {
+        type: "spring",
+        stiffness: 400,
+        damping: 30,
+      });
+    }
+  };
+
   return (
     <>
       {/* ── Card shell ── */}
-      <div
-        className={cn(
-          "relative group/card bg-white overflow-hidden flex flex-col",
-          "transition-shadow duration-200 select-none [touch-action:manipulation]",
-          "shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)]",
-          isNew
-            ? "border border-blue-400/60 ring-2 ring-blue-400/20 animate-fade-up"
-            : "border border-[#E5E5E5]",
-        )}
-        style={{ borderRadius: 18, fontFamily: SF }}
-      >
+      <div className="relative overflow-hidden" style={{ borderRadius: 18 }}>
+        {/* Fond rouge derrière (swipe feedback) */}
+        <motion.div
+          className="absolute inset-0 bg-red-500 rounded-[18px]"
+          style={{ opacity: bgOpacity, zIndex: 0 }}
+        />
+
+        {/* Carte swipeable */}
+        <motion.div
+          ref={cardRef}
+          className={cn(
+            "relative group/card bg-white overflow-hidden flex flex-col z-[1]",
+            "transition-shadow duration-200 select-none [touch-action:manipulation]",
+            "shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)]",
+            isNew
+              ? "border border-blue-400/60 ring-2 ring-blue-400/20 animate-fade-up"
+              : "border border-[#E5E5E5]",
+          )}
+          style={{ borderRadius: 18, fontFamily: SF, x, opacity }}
+          drag={onDelete ? "x" : false}
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.3}
+          onDragEnd={handleCardDragEnd}
+        >
         {/* ── Action buttons — visibles au hover ── */}
         <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity duration-150">
           <button
@@ -703,6 +747,7 @@ export function TshirtOrderCard({ order: initialOrder, isNew, onDelete, compact 
             )}
           </div>
         </div>
+        </motion.div>
       </div>
 
       {/* ── Modals ── */}
