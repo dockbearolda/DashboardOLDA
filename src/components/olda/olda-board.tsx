@@ -251,6 +251,8 @@ function KanbanColumn({
   onDeleteOrder?: (orderId: string) => void;
 }) {
   const [isDragOver, setIsDragOver] = useState(false);
+  // ── Auto-scaling : mode compact si colonne dense ───────────────────────────
+  const compact = orders.length > 5;
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -290,8 +292,9 @@ function KanbanColumn({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "flex flex-col gap-2 p-2 rounded-lg transition-all",
-          isDragOver ? "bg-blue-50 border-2 border-blue-300 shadow-md" : ""
+          "flex flex-col p-2 rounded-xl transition-all",
+          compact ? "gap-1.5" : "gap-3",
+          isDragOver ? "bg-blue-50 border-2 border-blue-300 shadow-md" : "",
         )}
       >
         {orders.length === 0 ? (
@@ -313,6 +316,7 @@ function KanbanColumn({
                 order={o}
                 isNew={newOrderIds?.has(o.id)}
                 onDelete={onDeleteOrder ? () => onDeleteOrder(o.id) : undefined}
+                compact={compact}
               />
             </div>
           ))
