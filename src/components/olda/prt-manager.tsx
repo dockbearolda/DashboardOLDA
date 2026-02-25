@@ -28,49 +28,6 @@ interface PRTItem {
   updatedAt: string;
 }
 
-function SwipeableRow({
-  children,
-  onDelete,
-}: {
-  children: React.ReactNode;
-  onDelete: () => void;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const x = useMotionValue(0);
-  const opacity = useTransform(x, [-100, -50, 0], [0, 0.6, 1]);
-  const bgOpacity = useTransform(x, [-100, -40, 0], [0.2, 0.1, 0]);
-
-  const handleDragEnd = (_: any, info: any) => {
-    if (Math.abs(info.offset.x) > 60) {
-      animate(x, info.offset.x > 0 ? 300 : -300, { duration: 0.2 });
-      setTimeout(onDelete, 150);
-    } else {
-      animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
-    }
-  };
-
-  return (
-    <div ref={containerRef} className="relative overflow-hidden rounded-[14px]">
-      {/* Red background on swipe */}
-      <motion.div
-        className="absolute inset-0 bg-red-500"
-        style={{ opacity: bgOpacity }}
-      />
-
-      {/* Content */}
-      <motion.div
-        drag="x"
-        dragElastic={0.2}
-        dragMomentum={false}
-        onDragEnd={handleDragEnd}
-        style={{ opacity, x }}
-        className="relative z-10"
-      >
-        {children}
-      </motion.div>
-    </div>
-  );
-}
 
 interface PRTManagerProps {
   items: PRTItem[];
@@ -215,20 +172,41 @@ export function PRTManager({ items, onItemsChange }: PRTManagerProps) {
             </tr>
           </thead>
           <tbody>
-            <AnimatePresence mode="popLayout">
-              {sortedItems.map((item, idx) => (
-                <motion.tr
-                  key={item.id}
-                  layout
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: 100 }}
-                  className={cn(
-                    "border-b border-gray-100 transition-all",
-                    idx % 2 === 0 ? "bg-white" : "bg-gray-50/50",
-                    item.done && "opacity-50"
-                  )}
-                >
+            <Reorder.Group
+              as="tbody"
+              axis="y"
+              values={sortedItems}
+              onReorder={(newOrder) => {
+                const reorderedItems = newOrder.map((item, idx) => ({
+                  ...item,
+                  position: idx,
+                }));
+                onItemsChange?.(items.filter((i) => !reorderedItems.some((r) => r.id === i.id)).concat(reorderedItems));
+                Promise.all(
+                  reorderedItems.map((item) =>
+                    fetch(`/api/prt-requests/${item.id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ position: item.position }),
+                    })
+                  )
+                ).catch((err) => console.error("Failed to save positions:", err));
+              }}
+            >
+              <AnimatePresence mode="popLayout">
+                {sortedItems.map((item, idx) => (
+                  <Reorder.Item key={item.id} value={item} as="tr">
+                    <motion.tr
+                      layout
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, x: 100 }}
+                      className={cn(
+                        "border-b border-gray-100 transition-all group hover:bg-gray-50/30",
+                        idx % 2 === 0 ? "bg-white" : "bg-gray-50/50",
+                        item.done && "opacity-50"
+                      )}
+                    >
                   <td className="px-3 py-3">
                     <input
                       type="checkbox"
@@ -373,30 +351,32 @@ export function PRTManager({ items, onItemsChange }: PRTManagerProps) {
                       className="w-12 bg-transparent border-none focus:outline-none focus:bg-white focus:border-b border-gray-200 text-gray-900 text-right"
                     />
                   </td>
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleToggleDone(item.id)}
-                        className={cn(
-                          "p-1.5 rounded-lg transition-colors",
-                          item.done
-                            ? "text-green-600 bg-green-50"
-                            : "text-gray-400 hover:text-green-600 hover:bg-green-50"
-                        )}
-                      >
-                        <Check className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </motion.tr>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleToggleDone(item.id)}
+                          className={cn(
+                            "p-1.5 rounded-lg transition-colors",
+                            item.done
+                              ? "text-green-600 bg-green-50"
+                              : "text-gray-400 hover:text-green-600 hover:bg-green-50"
+                          )}
+                        >
+                          <Check className="h-4 w-4" />
+                        </button>
+                        <motion.button
+                          onClick={() => handleDelete(item.id)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </motion.button>
+                      </div>
+                    </td>
+                  </motion.tr>
+                </Reorder.Item>
               ))}
-            </AnimatePresence>
+              </AnimatePresence>
+            </Reorder.Group>
           </tbody>
         </table>
       </div>

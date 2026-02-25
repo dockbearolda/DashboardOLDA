@@ -44,27 +44,13 @@ function WorkflowItemRow({
   onUpdate: (title: string) => Promise<void>;
   isDeleting: boolean;
 }) {
-  const x = useMotionValue(0);
-  const opacity = useTransform(x, [-100, -50, 0], [0, 0.6, 1]);
-  const scale = useTransform(x, [-100, 0], [0.85, 1]);
-  const [isDragging, setIsDragging] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(item.title);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleDelete = useCallback(async () => {
-    await animate(x, -150, { duration: 0.2 });
     await onDelete(item.id);
-  }, [item.id, onDelete, x]);
-
-  const handleDragEnd = useCallback(() => {
-    const currentX = x.get();
-    if (currentX < -50) {
-      handleDelete();
-    } else {
-      animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
-    }
-  }, [handleDelete, x]);
+  }, [item.id, onDelete]);
 
   const handleEditStart = useCallback(() => {
     setIsEditing(true);
@@ -98,29 +84,8 @@ function WorkflowItemRow({
       transition={{ duration: 0.2 }}
       className="relative"
     >
-      {/* Delete background (appears when swiping left) */}
-      {isDragging && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="absolute inset-0 flex items-center justify-end px-4 rounded-[14px] bg-red-50 border border-red-200"
-        >
-          <Trash2 className="h-4 w-4 text-red-500" />
-        </motion.div>
-      )}
-
-      {/* Draggable item */}
-      <motion.div
-        drag="x"
-        dragElastic={0.2}
-        dragMomentum={false}
-        onDragEnd={handleDragEnd}
-        onDragStart={() => setIsDragging(true)}
-        onDragCapture={() => setIsDragging(true)}
-        style={{ opacity, scale, x }}
-        className="relative z-10 group"
-      >
+      {/* Item row */}
+      <div className="relative z-10 group">
         <div
           className={cn(
             "flex items-center gap-2.5 px-3.5 py-2.5 rounded-[14px] bg-white border border-gray-100",
@@ -181,7 +146,7 @@ function WorkflowItemRow({
             </motion.button>
           )}
         </div>
-      </motion.div>
+      </div>
     </motion.div>
   );
 }
