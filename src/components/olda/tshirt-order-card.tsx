@@ -79,7 +79,7 @@ export interface OrderPatch {
   customerName?: string;
   customerPhone?: string;
   notes?: string;
-  coteLogoAr?: string;
+  tailleDTFAr?: string;
 }
 
 // ── VisualTile — image ou code DTF ───────────────────────────────────────────
@@ -156,9 +156,9 @@ function PrintModal({
   const prenom = nameParts[0] ?? "";
   const nom = nameParts.slice(1).join(" ") || prenom;
 
-  const logoAvant = extra.logoAvant ?? images[0] ?? null;
-  const logoArriere = extra.logoArriere ?? images[1] ?? null;
-  const deadlineTxt = deadlineLabel(extra.deadline);
+  const logoAvant = extra.fiche?.visuelAvant ?? images[0] ?? null;
+  const logoArriere = extra.fiche?.visuelArriere ?? images[1] ?? null;
+  const deadlineTxt = deadlineLabel(extra.limit);
   const prt = extra.prt;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -281,9 +281,9 @@ function PrintModal({
           </div>
 
           {/* Infos produit */}
-          {(extra.typeProduit || extra.coloris || extra.coteLogoAr || extra.taille) && (
+          {(extra.fiche?.typeProduit || extra.fiche?.couleur || extra.fiche?.tailleDTFAr || extra.taille) && (
             <div className="px-5 pt-3 flex items-center gap-3 flex-wrap">
-              {[extra.typeProduit, extra.coloris, extra.coteLogoAr, extra.taille]
+              {[extra.fiche?.typeProduit, extra.fiche?.couleur, extra.fiche?.tailleDTFAr, extra.taille]
                 .filter(Boolean)
                 .map((val, i) => (
                   <span key={i} style={{ fontSize: 13, color: "#3a3a3c", fontWeight: 500 }}>{val}</span>
@@ -338,7 +338,7 @@ function PrintModal({
             {order.notes?.trim() && <p style={{ fontSize: 12, color: "#636366", fontStyle: "italic" }}>{order.notes}</p>}
             {prt && Object.values(prt).some(v => v) && (
               <div className="mt-2 rounded-xl bg-gray-50 border border-[#E5E5E5] px-3 py-2 flex items-center gap-3 flex-wrap">
-                {[prt.refPrt, prt.taillePrt, prt.quantite && `×${prt.quantite}`, prt.type, prt.statutPrt]
+                {[prt.refPrt, prt.taillePrt, prt.quantite && `×${prt.quantite}`]
                   .filter(Boolean)
                   .map((v, i) => (
                     <span key={i} style={{ fontSize: 12, color: "#3a3a3c", fontWeight: 600, fontFamily: "monospace" }}>{v}</span>
@@ -366,7 +366,7 @@ function EditOrderModal({
 }) {
   const [name,   setName]   = useState(order.customerName ?? "");
   const [phone,  setPhone]  = useState(order.customerPhone ?? "");
-  const [dtf,    setDtf]    = useState(extra.coteLogoAr ?? "");
+  const [dtf,    setDtf]    = useState(extra.fiche?.tailleDTFAr ?? "");
   const [notes,  setNotes]  = useState(order.notes ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -382,7 +382,7 @@ function EditOrderModal({
       customerName:  name  || undefined,
       customerPhone: phone || undefined,
       notes,
-      coteLogoAr:    dtf   || undefined,
+      tailleDTFAr:   dtf   || undefined,
     };
     try {
       await fetch(`/api/orders/${order.id}`, {
@@ -392,7 +392,7 @@ function EditOrderModal({
           customerName:  patch.customerName,
           customerPhone: patch.customerPhone,
           notes:         patch.notes,
-          ...(patch.coteLogoAr ? { shippingAddressPatch: { coteLogoAr: patch.coteLogoAr } } : {}),
+          ...(patch.tailleDTFAr ? { shippingAddressPatch: { tailleDTFAr: patch.tailleDTFAr } } : {}),
         }),
       });
       onSaved(patch);
@@ -474,8 +474,8 @@ export function TshirtOrderCard({ order: initialOrder, isNew, onDelete, compact 
   const { localImages, addImage } = useLocalImages(order.id);
   const displayImages = serverImages.length > 0 ? serverImages : localImages;
 
-  const visualAvant    = extra.logoAvant   ?? displayImages[0] ?? null;
-  const visualArriere  = extra.logoArriere ?? displayImages[1] ?? null;
+  const visualAvant    = extra.fiche?.visuelAvant   ?? displayImages[0] ?? null;
+  const visualArriere  = extra.fiche?.visuelArriere ?? displayImages[1] ?? null;
   const hasVisuals     = !!(visualAvant || visualArriere);
 
   const [modalOpen,     setModalOpen]     = useState(false);
@@ -484,7 +484,7 @@ export function TshirtOrderCard({ order: initialOrder, isNew, onDelete, compact 
   const [accordeonOpen, setAccordeonOpen] = useState(false);
 
   const qrValue    = origin ? `${origin}/dashboard/orders/${order.id}` : order.orderNumber;
-  const deadlineTxt = deadlineLabel(extra.deadline);
+  const deadlineTxt = deadlineLabel(extra.limit);
   const prt         = extra.prt;
   const qrSize      = compact ? 50 : 60;
 
@@ -499,9 +499,10 @@ export function TshirtOrderCard({ order: initialOrder, isNew, onDelete, compact 
       if (patch.customerName  !== undefined) next.customerName  = patch.customerName;
       if (patch.customerPhone !== undefined) next.customerPhone = patch.customerPhone;
       if (patch.notes         !== undefined) next.notes         = patch.notes;
-      if (patch.coteLogoAr) {
+      if (patch.tailleDTFAr) {
         const sa = (prev.shippingAddress as Record<string, unknown>) ?? {};
-        next.shippingAddress = { ...sa, coteLogoAr: patch.coteLogoAr, _source: "olda_studio" };
+        const prevFiche = (sa.fiche as Record<string, unknown>) ?? {};
+        next.shippingAddress = { ...sa, fiche: { ...prevFiche, tailleDTFAr: patch.tailleDTFAr }, _source: "olda_studio" };
       }
       return next;
     });
@@ -606,21 +607,21 @@ export function TshirtOrderCard({ order: initialOrder, isNew, onDelete, compact 
         )}
 
         {/* ══ SECTION 3 : Infos immédiates — typeProduit · couleur · tailleDTFAr ══ */}
-        {(extra.typeProduit || extra.coloris || extra.coteLogoAr) && (
+        {(extra.fiche?.typeProduit || extra.fiche?.couleur || extra.fiche?.tailleDTFAr) && (
           <div className={cn("flex flex-col", compact ? "px-2.5 pb-1.5 gap-0.5" : "px-3 pb-2 gap-1")}>
-            {extra.typeProduit && (
+            {extra.fiche?.typeProduit && (
               <p className="truncate" style={{ fontSize: compact ? 11 : 12, color: "#3a3a3c", fontWeight: 500 }}>
-                {extra.typeProduit}
+                {extra.fiche?.typeProduit}
               </p>
             )}
-            {extra.coloris && (
+            {extra.fiche?.couleur && (
               <p className="truncate" style={{ fontSize: compact ? 11 : 12, color: "#636366" }}>
-                {extra.coloris}
+                {extra.fiche?.couleur}
               </p>
             )}
-            {extra.coteLogoAr && (
+            {extra.fiche?.tailleDTFAr && (
               <p className="truncate font-mono" style={{ fontSize: compact ? 11 : 12, color: "#636366", fontWeight: 600 }}>
-                {extra.coteLogoAr}
+                {extra.fiche?.tailleDTFAr}
               </p>
             )}
           </div>
@@ -687,7 +688,7 @@ export function TshirtOrderCard({ order: initialOrder, isNew, onDelete, compact 
             {/* Bloc PRT */}
             {prt && Object.values(prt).some(v => v) && (
               <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                {[prt.refPrt, prt.taillePrt, prt.quantite && `×${prt.quantite}`, prt.type]
+                {[prt.refPrt, prt.taillePrt, prt.quantite && `×${prt.quantite}`]
                   .filter(Boolean)
                   .map((v, i) => (
                     <span
