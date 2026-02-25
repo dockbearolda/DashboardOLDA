@@ -15,7 +15,7 @@
 
 import { useState, useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Shirt, User, CreditCard, MapPin } from "lucide-react";
 import { differenceInCalendarDays, format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -184,18 +184,51 @@ function EmptyBackIndicator() {
   );
 }
 
+/** Ligne label / valeur standard du panneau détaillé */
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 w-28 shrink-0 pt-[3px] leading-tight">
+        {label}
+      </span>
+      <span className="text-sm font-medium text-gray-900 leading-snug break-words min-w-0">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/** Ligne montant pour le bloc financier */
+function FinancialRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs text-gray-500">{label}</span>
+      <span className="text-sm font-medium text-gray-800 font-mono">{value}</span>
+    </div>
+  );
+}
+
 // ── Props ──────────────────────────────────────────────────────────────────────
 
 export interface OrderCardProps {
   data: OldaExtraData;
   orderId?: string;
+  /** Email du client (depuis Order.customerEmail) */
+  customerEmail?: string;
+  /** Adresse de livraison formatée (chaîne ou objet sérialisé) */
+  customerAddress?: string;
   onDelete?: () => void;
   onEdit?: () => void;
 }
 
 // ── Composant Principal ────────────────────────────────────────────────────────
 
-export function OrderCard({ data, orderId = "unknown" }: OrderCardProps) {
+export function OrderCard({
+  data,
+  orderId = "unknown",
+  customerEmail,
+  customerAddress,
+}: OrderCardProps) {
   const origin = useOrigin();
   const { localImages } = useLocalImages(orderId);
   const [isOpen, setIsOpen] = useState(false);
@@ -241,12 +274,11 @@ export function OrderCard({ data, orderId = "unknown" }: OrderCardProps) {
       : commande || "olda";
 
   const hasAccordionContent = !!(
-    collection ||
-    taille ||
-    typeProduit ||
-    couleur ||
-    tailleDTF ||
-    refPrt
+    typeProduit || couleur || tailleDTF ||
+    collection || taille || note ||
+    refPrt || taillePrt || quantite !== undefined ||
+    customerEmail || customerAddress ||
+    hasBilling
   );
 
   // ── Rendu ──────────────────────────────────────────────────────────────────
@@ -479,60 +511,177 @@ export function OrderCard({ data, orderId = "unknown" }: OrderCardProps) {
           )}
         </div>
 
-        {/* ── Accordéon : détails secondaires ── */}
+        {/* ══ ACCORDÉON : Panneau de détails ══════════════════════════════════ */}
         {isOpen && (
           <div
             className={cn(
-              "rounded-b-2xl border border-t-0 border-[#E5E5E5] bg-[#FAFAFA]",
-              "px-4 pb-4 pt-3 space-y-2"
+              "rounded-b-2xl border border-t-0 border-[#E5E5E5] bg-slate-50/70",
+              "px-4 pb-5 pt-4 space-y-4"
             )}
           >
-            {collection && (
-              <p className="text-xs text-gray-500">
-                <span className="font-medium text-gray-400">Collection :</span>{" "}
-                {collection}
-              </p>
-            )}
-            {taille && (
-              <p className="text-xs text-gray-500">
-                <span className="font-medium text-gray-400">Taille :</span>{" "}
-                {taille}
-              </p>
-            )}
-            {(typeProduit || couleur || tailleDTF) && (
-              <p className="text-xs text-gray-500">
-                {[typeProduit, couleur, tailleDTF].filter(Boolean).join(" · ")}
-              </p>
+
+            {/* ── BLOC 1 : Produit & Personnalisation ───────────────────────── */}
+            {(typeProduit || couleur || tailleDTF || collection || taille || note || refPrt) && (
+              <section className="space-y-3">
+
+                {/* En-tête du bloc */}
+                <div className="flex items-center gap-1.5">
+                  <Shirt size={13} className="text-gray-400 shrink-0" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                    Produit &amp; Personnalisation
+                  </span>
+                </div>
+
+                {/* Grille label / valeur */}
+                <div className="space-y-2 pl-0.5">
+                  {typeProduit && <DetailRow label="Famille" value={typeProduit} />}
+                  {couleur && <DetailRow label="Couleur" value={couleur} />}
+                  {tailleDTF && <DetailRow label="Dimensions DTF" value={tailleDTF} />}
+                  {collection && <DetailRow label="Collection" value={collection} />}
+                  {taille && <DetailRow label="Taille" value={taille} />}
+                </div>
+
+                {/* Note client — encart dédié */}
+                {note && (
+                  <div className="rounded-xl border border-[#E8E8E8] bg-white px-3 py-2.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1.5">
+                      Note / Message client
+                    </p>
+                    <p className="text-sm italic text-gray-700 leading-snug break-words">
+                      {note}
+                    </p>
+                  </div>
+                )}
+
+                {/* PRT / Impression — encart dédié */}
+                {(refPrt || taillePrt || quantite !== undefined) && (
+                  <div className="rounded-xl border border-[#E8E8E8] bg-white px-3 py-2.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2">
+                      Impression (PRT)
+                    </p>
+                    <div className="space-y-2">
+                      {refPrt && <DetailRow label="Référence" value={refPrt} />}
+                      {taillePrt && <DetailRow label="Taille" value={taillePrt} />}
+                      {quantite !== undefined && (
+                        <DetailRow label="Quantité" value={String(quantite)} />
+                      )}
+                    </div>
+                  </div>
+                )}
+              </section>
             )}
 
-            {/* Bloc PRT */}
-            {(refPrt || taillePrt || quantite !== undefined) && (
-              <div className="rounded-xl border border-[#E5E5E5] bg-white p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
-                  Impression
-                </p>
-                <div className="space-y-1 text-xs text-gray-500">
-                  {refPrt && (
-                    <p>
-                      <span className="font-medium text-gray-400">Réf :</span>{" "}
-                      {refPrt}
-                    </p>
+            {/* Séparateur */}
+            {(typeProduit || couleur || tailleDTF || collection || taille || note || refPrt) &&
+              (customerEmail || customerAddress || telephone || data.limit) && (
+                <div className="h-px bg-[#E8E8E8]" />
+            )}
+
+            {/* ── BLOC 2 : Client & Logistique ──────────────────────────────── */}
+            {(customerEmail || customerAddress || telephone || data.limit) && (
+              <section className="space-y-3">
+
+                <div className="flex items-center gap-1.5">
+                  <User size={13} className="text-gray-400 shrink-0" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                    Client &amp; Logistique
+                  </span>
+                </div>
+
+                <div className="space-y-2 pl-0.5">
+                  {telephone && <DetailRow label="Téléphone" value={telephone} />}
+                  {customerEmail && <DetailRow label="Email" value={customerEmail} />}
+
+                  {/* Deadline complète avec badge coloré */}
+                  {deadline && (
+                    <div className="flex items-start gap-3">
+                      <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 w-28 shrink-0 pt-[3px] leading-tight">
+                        Deadline
+                      </span>
+                      <DeadlineBadge label={deadline.label} state={deadline.state} />
+                    </div>
                   )}
-                  {taillePrt && (
-                    <p>
-                      <span className="font-medium text-gray-400">Taille :</span>{" "}
-                      {taillePrt}
-                    </p>
-                  )}
-                  {quantite !== undefined && (
-                    <p>
-                      <span className="font-medium text-gray-400">Qté :</span>{" "}
-                      {quantite}
-                    </p>
+
+                  {/* Adresse complète — multiline */}
+                  {customerAddress && (
+                    <div className="flex items-start gap-3">
+                      <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 w-28 shrink-0 pt-[3px] leading-tight">
+                        <MapPin size={11} className="inline -mt-0.5 mr-0.5" />
+                        Adresse
+                      </span>
+                      <p className="text-sm font-medium text-gray-900 leading-snug whitespace-pre-line break-words min-w-0">
+                        {customerAddress}
+                      </p>
+                    </div>
                   )}
                 </div>
-              </div>
+              </section>
             )}
+
+            {/* Séparateur */}
+            {hasBilling &&
+              (typeProduit || couleur || tailleDTF || collection || taille || note ||
+               refPrt || customerEmail || customerAddress || telephone || data.limit) && (
+                <div className="h-px bg-[#E8E8E8]" />
+            )}
+
+            {/* ── BLOC 3 : Détail Financier ──────────────────────────────────── */}
+            {hasBilling && (
+              <section className="space-y-3">
+
+                <div className="flex items-center gap-1.5">
+                  <CreditCard size={13} className="text-gray-400 shrink-0" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                    Détail Financier
+                  </span>
+                </div>
+
+                <div className="rounded-xl border border-[#E8E8E8] bg-white px-3 py-2.5 space-y-2">
+                  {prix?.tshirt !== undefined && (
+                    <FinancialRow label="T-shirt nu" value={fmtPrice(prix.tshirt)} />
+                  )}
+                  {prix?.personnalisation !== undefined && (
+                    <FinancialRow
+                      label="Personnalisation (DTF / Pressage)"
+                      value={fmtPrice(prix.personnalisation)}
+                    />
+                  )}
+
+                  {/* Ligne totale avec statut paiement */}
+                  {prix?.total !== undefined && (
+                    <>
+                      <div className="h-px bg-[#F0F0F0]" />
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                          Total
+                        </span>
+                        <span
+                          className={cn(
+                            "text-sm font-bold font-mono",
+                            isPaid ? "text-green-600" : "text-red-500"
+                          )}
+                        >
+                          {fmtPrice(prix.total)}
+                        </span>
+                      </div>
+                      <div className="flex justify-end">
+                        <span
+                          className={cn(
+                            "text-[10px] font-semibold px-2 py-0.5 rounded-full",
+                            isPaid
+                              ? "bg-green-50 text-green-600 border border-green-200"
+                              : "bg-red-50 text-red-500 border border-red-200"
+                          )}
+                        >
+                          {isPaid ? "✓ Payé" : "✗ Non payé"}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </section>
+            )}
+
           </div>
         )}
       </div>
