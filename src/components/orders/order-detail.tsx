@@ -230,16 +230,14 @@ function VisuelCard({ label, src }: { label: string; src?: string | null }) {
 interface EditFields {
   customerName: string;
   customerPhone: string;
-  deadline: string;
+  limit: string;
   collection: string;
   reference: string;
-  coloris: string;
+  couleur: string;
   taille: string;
-  coteLogoAr: string;
-  logoAvant: string;
-  couleurLogoAvant: string;
-  logoArriere: string;
-  couleurLogoArriere: string;
+  tailleDTFAr: string;
+  visuelAvant: string;
+  visuelArriere: string;
   notes: string;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
@@ -259,21 +257,19 @@ function EditModal({
   onSaved: (updated: Order) => void;
 }) {
   const [fields, setFields] = useState<EditFields>({
-    customerName:      order.customerName,
-    customerPhone:     order.customerPhone ?? "",
-    deadline:          extra.deadline ?? "",
-    collection:        extra.collection ?? "",
-    reference:         extra.reference ?? "",
-    coloris:           extra.coloris ?? "",
-    taille:            extra.taille ?? "",
-    coteLogoAr:        extra.coteLogoAr ?? "",
-    logoAvant:         extra.logoAvant ?? "",
-    couleurLogoAvant:  extra.couleurLogoAvant ?? "",
-    logoArriere:       extra.logoArriere ?? "",
-    couleurLogoArriere:extra.couleurLogoArriere ?? "",
-    notes:             order.notes ?? "",
-    status:            order.status,
-    paymentStatus:     order.paymentStatus,
+    customerName:  order.customerName,
+    customerPhone: order.customerPhone ?? "",
+    limit:         extra.limit ?? "",
+    collection:    extra.collection ?? "",
+    reference:     extra.reference ?? "",
+    couleur:       extra.fiche?.couleur ?? "",
+    taille:        extra.taille ?? "",
+    tailleDTFAr:   extra.fiche?.tailleDTFAr ?? "",
+    visuelAvant:   extra.fiche?.visuelAvant ?? "",
+    visuelArriere: extra.fiche?.visuelArriere ?? "",
+    notes:         order.notes ?? "",
+    status:        order.status,
+    paymentStatus: order.paymentStatus,
   });
   const [saving, setSaving] = useState(false);
 
@@ -294,16 +290,16 @@ function EditModal({
           customerPhone: fields.customerPhone || null,
           shippingAddressPatch: {
             ...(extra._source ? { _source: extra._source } : {}),
-            deadline:           fields.deadline           || undefined,
-            collection:         fields.collection         || undefined,
-            reference:          fields.reference          || undefined,
-            coloris:            fields.coloris            || undefined,
-            taille:             fields.taille             || undefined,
-            coteLogoAr:         fields.coteLogoAr         || undefined,
-            logoAvant:          fields.logoAvant          || undefined,
-            couleurLogoAvant:   fields.couleurLogoAvant   || undefined,
-            logoArriere:        fields.logoArriere        || undefined,
-            couleurLogoArriere: fields.couleurLogoArriere || undefined,
+            limit:      fields.limit      || undefined,
+            collection: fields.collection || undefined,
+            reference:  fields.reference  || undefined,
+            taille:     fields.taille     || undefined,
+            fiche: {
+              couleur:       fields.couleur       || undefined,
+              tailleDTFAr:   fields.tailleDTFAr   || undefined,
+              visuelAvant:   fields.visuelAvant    || undefined,
+              visuelArriere: fields.visuelArriere  || undefined,
+            },
           },
         }),
       });
@@ -345,7 +341,7 @@ function EditModal({
             </label>
             <label className="block space-y-1">
               <span className="text-[12px] text-gray-500 font-medium">Limit</span>
-              <Input className={fieldClass} value={fields.deadline} onChange={set("deadline")} placeholder="2026-03-15 ou texte libre" />
+              <Input className={fieldClass} value={fields.limit} onChange={set("limit")} placeholder="2026-03-15 ou texte libre" />
             </label>
           </fieldset>
 
@@ -367,7 +363,7 @@ function EditModal({
               </label>
               <label className="block space-y-1">
                 <span className="text-[12px] text-gray-500 font-medium">Coloris</span>
-                <Input className={fieldClass} value={fields.coloris} onChange={set("coloris")} placeholder="Noir" />
+                <Input className={fieldClass} value={fields.couleur} onChange={set("couleur")} placeholder="Noir" />
               </label>
               <label className="block space-y-1">
                 <span className="text-[12px] text-gray-500 font-medium">Taille</span>
@@ -376,33 +372,25 @@ function EditModal({
             </div>
             <label className="block space-y-1">
               <span className="text-[12px] text-gray-500 font-medium">Taille DTF arrière</span>
-              <Input className={fieldClass} value={fields.coteLogoAr} onChange={set("coteLogoAr")} placeholder="270 mm" />
+              <Input className={fieldClass} value={fields.tailleDTFAr} onChange={set("tailleDTFAr")} placeholder="270 mm" />
             </label>
           </fieldset>
 
           <div className="border-t border-gray-100" />
 
-          {/* LOGOS */}
+          {/* VISUELS DTF */}
           <fieldset className="space-y-2">
             <legend className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-              Logos
+              Visuels DTF
             </legend>
             <div className="grid grid-cols-2 gap-2">
               <label className="block space-y-1">
-                <span className="text-[12px] text-gray-500 font-medium">Logo avant</span>
-                <Input className={fieldClass} value={fields.logoAvant} onChange={set("logoAvant")} placeholder="bea-16-ar-AV" />
+                <span className="text-[12px] text-gray-500 font-medium">Avant</span>
+                <Input className={fieldClass} value={fields.visuelAvant} onChange={set("visuelAvant")} placeholder="bea-16-ar-AV" />
               </label>
               <label className="block space-y-1">
-                <span className="text-[12px] text-gray-500 font-medium">Couleur AV</span>
-                <Input className={fieldClass} value={fields.couleurLogoAvant} onChange={set("couleurLogoAvant")} placeholder="Rose" />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-[12px] text-gray-500 font-medium">Logo arrière</span>
-                <Input className={fieldClass} value={fields.logoArriere} onChange={set("logoArriere")} placeholder="bea-16-ar-AR" />
-              </label>
-              <label className="block space-y-1">
-                <span className="text-[12px] text-gray-500 font-medium">Couleur AR</span>
-                <Input className={fieldClass} value={fields.couleurLogoArriere} onChange={set("couleurLogoArriere")} placeholder="Argent" />
+                <span className="text-[12px] text-gray-500 font-medium">Arrière</span>
+                <Input className={fieldClass} value={fields.visuelArriere} onChange={set("visuelArriere")} placeholder="bea-16-ar-AR" />
               </label>
             </div>
           </fieldset>
@@ -715,7 +703,7 @@ export function OrderDetail({ order: initialOrder }: OrderDetailProps) {
         </SectionCard>
 
         {/* ══ 2. VISUELS TECHNIQUES ══════════════════════════════════════════ */}
-        {(extra.logoAvant || extra.logoArriere ||
+        {(extra.fiche?.visuelAvant || extra.fiche?.visuelArriere ||
           order.items.some((i) => i.imageUrl)) && (
           <SectionCard>
             <SectionLabel>Visuels techniques</SectionLabel>
@@ -724,14 +712,14 @@ export function OrderDetail({ order: initialOrder }: OrderDetailProps) {
                 label="Face Avant"
                 src={
                   order.items.find((i) => /avant|front/i.test(i.name))?.imageUrl
-                  ?? extra.logoAvant
+                  ?? extra.fiche?.visuelAvant
                 }
               />
               <VisuelCard
                 label="Dos"
                 src={
                   order.items.find((i) => /arri[eè]re|dos|back/i.test(i.name))?.imageUrl
-                  ?? extra.logoArriere
+                  ?? extra.fiche?.visuelArriere
                 }
               />
             </div>
@@ -743,7 +731,7 @@ export function OrderDetail({ order: initialOrder }: OrderDetailProps) {
           <SectionLabel>Client</SectionLabel>
           <DataRow label="Nom"       value={order.customerName} />
           <DataRow label="Téléphone" value={order.customerPhone} />
-          <DataRow label="Limit"     value={extra.deadline} last />
+          <DataRow label="Limit"     value={extra.limit} last />
         </SectionCard>
 
         {/* ══ 4. PRODUIT ═════════════════════════════════════════════════════ */}
@@ -754,43 +742,43 @@ export function OrderDetail({ order: initialOrder }: OrderDetailProps) {
           <DataRow
             label="Coloris"
             value={
-              extra.coloris ? (
+              extra.fiche?.couleur ? (
                 <span className="flex items-center gap-2 justify-end">
-                  {extra.coloris}
-                  <ColorDot color={extra.coloris} />
+                  {extra.fiche?.couleur}
+                  <ColorDot color={extra.fiche?.couleur} />
                 </span>
               ) : undefined
             }
           />
           <DataRow label="Taille"        value={extra.taille} />
-          <DataRow label="Taille DTF AR" value={extra.coteLogoAr} last />
+          <DataRow label="Taille DTF AR" value={extra.fiche?.tailleDTFAr} last />
         </SectionCard>
 
         {/* ══ 5. LOGOS ═══════════════════════════════════════════════════════ */}
-        {(extra.logoAvant || extra.logoArriere ||
-          extra.couleurLogoAvant || extra.couleurLogoArriere) && (
+        {(extra.fiche?.visuelAvant || extra.fiche?.visuelArriere ||
+          undefined || undefined) && (
           <SectionCard>
             <SectionLabel>Logos</SectionLabel>
-            <DataRow label="Logo avant"   value={extra.logoAvant}   mono />
+            <DataRow label="Logo avant"   value={extra.fiche?.visuelAvant}   mono />
             <DataRow
               label="Couleur avant"
               value={
-                extra.couleurLogoAvant ? (
+                undefined ? (
                   <span className="flex items-center gap-2 justify-end">
-                    {extra.couleurLogoAvant}
-                    <ColorDot color={extra.couleurLogoAvant} />
+                    {undefined}
+                    <ColorDot color={undefined} />
                   </span>
                 ) : undefined
               }
             />
-            <DataRow label="Logo arrière" value={extra.logoArriere} mono />
+            <DataRow label="Logo arrière" value={extra.fiche?.visuelArriere} mono />
             <DataRow
               label="Couleur arrière"
               value={
-                extra.couleurLogoArriere ? (
+                undefined ? (
                   <span className="flex items-center gap-2 justify-end">
-                    {extra.couleurLogoArriere}
-                    <ColorDot color={extra.couleurLogoArriere} />
+                    {undefined}
+                    <ColorDot color={undefined} />
                   </span>
                 ) : undefined
               }
