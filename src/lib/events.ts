@@ -1,18 +1,31 @@
 /**
- * Global in-memory event emitter for real-time order notifications via SSE.
+ * Global in-memory event emitters for real-time notifications via SSE.
  *
- * Uses a global singleton to survive hot-reloads in development.
+ * Uses global singletons to survive hot-reloads in development.
  * Works correctly on a single-instance deployment (Railway).
+ *
+ *  orderEvents — new-order     : new Shopify order received via webhook
+ *  noteEvents  — note-changed  : a person-note was updated (PATCH /api/notes/[person])
  */
 import { EventEmitter } from "events";
 
 declare global {
   // eslint-disable-next-line no-var
   var __orderEvents: EventEmitter | undefined;
+  // eslint-disable-next-line no-var
+  var __noteEvents:  EventEmitter | undefined;
 }
 
-const emitter = globalThis.__orderEvents ?? new EventEmitter();
-emitter.setMaxListeners(200); // support many concurrent SSE clients
-globalThis.__orderEvents = emitter;
+// ── Orders ────────────────────────────────────────────────────────────────────
+const orders = globalThis.__orderEvents ?? new EventEmitter();
+orders.setMaxListeners(200);
+globalThis.__orderEvents = orders;
 
-export const orderEvents = emitter;
+export const orderEvents = orders;
+
+// ── Notes ─────────────────────────────────────────────────────────────────────
+const notes = globalThis.__noteEvents ?? new EventEmitter();
+notes.setMaxListeners(200);
+globalThis.__noteEvents = notes;
+
+export const noteEvents = notes;

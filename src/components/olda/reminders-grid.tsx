@@ -307,7 +307,51 @@ export function RemindersGrid({
     return m;
   });
 
-  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const saveTimers  = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const mountedRef  = useRef(true);
+
+  // ── SSE : synchronisation temps réel entre utilisateurs ─────────────────────
+  useEffect(() => {
+    mountedRef.current = true;
+    let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const connect = () => {
+      if (!mountedRef.current) return;
+      try {
+        es = new EventSource("/api/notes/stream");
+
+        es.addEventListener("note-changed", (event) => {
+          if (!mountedRef.current) return;
+          try {
+            const note = JSON.parse((event as MessageEvent).data) as {
+              person: string;
+              todos:  TodoItem[] | string;
+            };
+            let todos: TodoItem[] = [];
+            if (Array.isArray(note.todos))       todos = note.todos;
+            else if (typeof note.todos === "string") {
+              try { todos = JSON.parse(note.todos); } catch { todos = []; }
+            }
+            setTodosMap(prev => ({ ...prev, [note.person]: todos }));
+          } catch { /* malformed */ }
+        });
+
+        es.onerror = () => {
+          if (!mountedRef.current) return;
+          es?.close();
+          reconnectTimer = setTimeout(connect, 10_000);
+        };
+      } catch { /* SSE not supported — degrade silently */ }
+    };
+
+    connect();
+    return () => {
+      mountedRef.current = false;
+      es?.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+    };
+  }, []); // stable — ne dépend d'aucune prop/state
 
   // Mise à jour locale + persist debounced
   const handleUpdate = useCallback((key: string, next: TodoItem[]) => {
