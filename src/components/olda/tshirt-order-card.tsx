@@ -545,8 +545,8 @@ export function TshirtOrderCard({ order: initialOrder, isNew, onDelete, compact 
         {/* ══ Layout horizontal : QR gauche · Infos droite ═══════════════════ */}
         <div
           className={cn(
-            "flex items-stretch cursor-pointer select-none min-h-[96px]",
-            compact ? "min-h-[86px]" : "min-h-[96px]",
+            "flex items-stretch cursor-pointer select-none w-full",
+            compact ? "h-[84px]" : "h-[96px]",
           )}
           onClick={() => setModalOpen(true)}
         >
@@ -610,27 +610,22 @@ export function TshirtOrderCard({ order: initialOrder, isNew, onDelete, compact 
           </div>
         </div>
 
-        {/* ── Section Note — tronquée à 1 ligne pour ne pas étirer la carte ── */}
+        {/* ── Section Note — hauteur fixe h-7 pour cohérence entre cartes ── */}
         {order.notes?.trim() && (
           <div
-            className={cn(
-              "border-t border-gray-100 shrink-0 overflow-hidden",
-              compact ? "px-2.5 py-1.5" : "px-3 py-2",
-            )}
+            className="h-7 border-t border-gray-100 shrink-0 flex items-center gap-1.5 overflow-hidden px-3"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-1.5">
-              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#aeaeb2", flexShrink: 0 }}>
-                Note
-              </p>
-              <p
-                className="flex-1 text-gray-500 leading-tight truncate"
-                style={{ fontSize: compact ? 10 : 11 }}
-                title={order.notes}
-              >
-                {order.notes}
-              </p>
-            </div>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#aeaeb2", flexShrink: 0 }}>
+              Note
+            </span>
+            <span
+              className="flex-1 text-gray-500 truncate"
+              style={{ fontSize: compact ? 10 : 11 }}
+              title={order.notes}
+            >
+              {order.notes}
+            </span>
           </div>
         )}
 

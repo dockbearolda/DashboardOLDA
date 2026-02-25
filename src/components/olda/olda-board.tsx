@@ -310,7 +310,7 @@ function KanbanColumn({
                 e.dataTransfer.effectAllowed = "move";
                 e.dataTransfer.setData("orderId", o.id);
               }}
-              className="cursor-grab active:cursor-grabbing"
+              className="w-full cursor-grab active:cursor-grabbing"
             >
               <TshirtOrderCard
                 order={o}
