@@ -1,14 +1,25 @@
 "use client";
 
 /**
- * RemindersGrid — Apple Reminders style, 4 inline cards (one per person).
- * Light mode only — zero dark: variants.
+ * RemindersGrid — Gestures-first, Apple Reminders style, 4 inline cards.
+ *
+ * Interactions :
+ *   • Clic simple sur un texte  → édition inline (blur = save auto)
+ *   • Double-clic sur un texte  → suppression immédiate
+ *   • Glisser-déposer           → déplace un item entre les 4 fiches
+ *   • Clic sur le cercle        → toggle ✓/⊘
+ *   • Crayon en haut à droite   → ouvre l'input d'ajout
+ *
+ * Pas de bouton poubelle ni de croix — les gestes font tout.
+ * Drag & Drop 100 % natif (HTML5 DataTransfer), zéro lib externe.
  */
 
-import { useState, useRef, useCallback } from "react";
-import { Pencil, X } from "lucide-react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TodoItem } from "./person-note-modal";
+
+// ── Constantes ─────────────────────────────────────────────────────────────────
 
 const PEOPLE = [
   { key: "loic",     name: "Loïc" },
@@ -17,97 +28,183 @@ const PEOPLE = [
   { key: "amandine", name: "Amandine" },
 ] as const;
 
+type PersonKey = typeof PEOPLE[number]["key"];
+
+/** Délai (ms) pour distinguer clic simple / double-clic */
+const DBL_DELAY = 280;
+
 function newId(): string {
   return `t${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-// ── Single card ────────────────────────────────────────────────────────────────
+// ── Persistence (fire-and-forget) ─────────────────────────────────────────────
+
+function apiSave(key: string, todos: TodoItem[]) {
+  fetch(`/api/notes/${key}`, {
+    method:  "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({ todos }),
+  }).catch(() => {});
+}
+
+// ── ReminderCard ───────────────────────────────────────────────────────────────
 
 function ReminderCard({
   personKey,
   personName,
-  initialTodos,
+  todos,
   isActive,
+  onUpdate,
+  onReceiveTodo,
 }: {
-  personKey: string;
-  personName: string;
-  initialTodos: TodoItem[];
-  /** true si c'est la personne actuellement connectée */
-  isActive?: boolean;
+  personKey:    PersonKey;
+  personName:   string;
+  todos:        TodoItem[];
+  isActive?:    boolean;
+  /** Called when THIS card's todos change */
+  onUpdate:     (next: TodoItem[]) => void;
+  /** Called when a dragged item is dropped FROM another card */
+  onReceiveTodo:(fromKey: PersonKey, todoId: string) => void;
 }) {
-  const [todos, setTodos]           = useState<TodoItem[]>(initialTodos);
-  const [editing, setEditing]       = useState(false);
-  const [draft, setDraft]           = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const inputRef                    = useRef<HTMLInputElement>(null);
-  const saveTimer                   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── Local UI state ───────────────────────────────────────────────────────────
+  const [editingId,  setEditingId]  = useState<string | null>(null);
+  const [editText,   setEditText]   = useState("");
+  const [isAdding,   setIsAdding]   = useState(false);
+  const [draft,      setDraft]      = useState("");
+  const [isDragOver, setIsDragOver] = useState(false);
 
-  const persist = useCallback((next: TodoItem[]) => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      fetch(`/api/notes/${personKey}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ todos: next }),
-      }).catch(() => {});
-    }, 600);
-  }, [personKey]);
+  const editInputRef = useRef<HTMLInputElement>(null);
+  const addInputRef  = useRef<HTMLInputElement>(null);
+  const clickTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup timer on unmount
+  useEffect(() => () => { if (clickTimer.current) clearTimeout(clickTimer.current); }, []);
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
 
   const toggle = useCallback((id: string) => {
-    setTodos((prev) => {
-      const next = prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t));
-      persist(next);
-      return next;
-    });
-  }, [persist]);
+    onUpdate(todos.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  }, [todos, onUpdate]);
 
-  const remove = useCallback((id: string) => {
-    setTodos((prev) => {
-      const next = prev.filter((t) => t.id !== id);
-      persist(next);
-      return next;
-    });
-    setSelectedId(null);
-  }, [persist]);
+  // ── Inline edit ──────────────────────────────────────────────────────────────
+
+  const startEdit = useCallback((todo: TodoItem) => {
+    setEditingId(todo.id);
+    setEditText(todo.text);
+    setTimeout(() => editInputRef.current?.focus(), 20);
+  }, []);
+
+  const commitEdit = useCallback(() => {
+    if (!editingId) return;
+    const text = editText.trim();
+    onUpdate(
+      text
+        ? todos.map(t => t.id === editingId ? { ...t, text } : t)
+        : todos.filter(t => t.id !== editingId)
+    );
+    setEditingId(null);
+    setEditText("");
+  }, [editingId, editText, todos, onUpdate]);
+
+  // ── Geste : clic simple → éditer · double-clic → supprimer ───────────────────
+
+  const handleItemClick = useCallback((todo: TodoItem) => {
+    // Already editing → ignore
+    if (editingId === todo.id) return;
+
+    if (clickTimer.current) {
+      // Second click arrives before timer → double-clic → delete
+      clearTimeout(clickTimer.current);
+      clickTimer.current = null;
+      onUpdate(todos.filter(t => t.id !== todo.id));
+      return;
+    }
+
+    // First click : wait to see if a second one arrives
+    clickTimer.current = setTimeout(() => {
+      clickTimer.current = null;
+      startEdit(todo);
+    }, DBL_DELAY);
+  }, [editingId, todos, onUpdate, startEdit]);
+
+  // ── Ajout rapide ─────────────────────────────────────────────────────────────
 
   const commitDraft = useCallback(() => {
     const text = draft.trim();
-    if (!text) { setEditing(false); setDraft(""); return; }
-    setTodos((prev) => {
-      const next = [...prev, { id: newId(), text, done: false }];
-      persist(next);
-      return next;
-    });
-    setDraft("");
-    setTimeout(() => inputRef.current?.focus(), 0);
-  }, [draft, persist]);
+    if (text) {
+      onUpdate([...todos, { id: newId(), text, done: false }]);
+      setDraft("");
+      setTimeout(() => addInputRef.current?.focus(), 0);
+    } else {
+      setIsAdding(false);
+      setDraft("");
+    }
+  }, [draft, todos, onUpdate]);
 
-  const openEdit = () => {
-    setEditing(true);
-    setTimeout(() => inputRef.current?.focus(), 30);
+  const openAdd = () => {
+    setIsAdding(true);
+    setTimeout(() => addInputRef.current?.focus(), 30);
   };
 
-  return (
-    <div className={cn(
-      "rounded-2xl bg-white border shadow-sm p-3 md:p-4 flex flex-col min-h-[96px] md:min-h-[110px] transition-all duration-300",
-      isActive ? "border-blue-300/70 shadow-blue-100/60" : "border-gray-200"
-    )}>
+  // ── Drag & Drop (HTML5 natif) ─────────────────────────────────────────────────
 
+  const handleDragStart = (e: React.DragEvent, todo: TodoItem) => {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("rd_todoId",  todo.id);
+    e.dataTransfer.setData("rd_fromKey", personKey);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragOver(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const todoId  = e.dataTransfer.getData("rd_todoId");
+    const fromKey = e.dataTransfer.getData("rd_fromKey") as PersonKey;
+    if (todoId && fromKey && fromKey !== personKey) {
+      onReceiveTodo(fromKey, todoId);
+    }
+  };
+
+  // ── Render ───────────────────────────────────────────────────────────────────
+
+  return (
+    <div
+      className={cn(
+        "rounded-2xl bg-white border shadow-sm p-3 md:p-4",
+        "flex flex-col min-h-[96px] md:min-h-[110px]",
+        "transition-all duration-200",
+        isActive   ? "border-blue-300/70 shadow-blue-100/60" : "border-gray-200",
+        isDragOver ? "border-blue-400 bg-blue-50/30 scale-[1.01] shadow-blue-100" : ""
+      )}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {/* ── Header ── */}
       <div className="flex items-center justify-between mb-2 md:mb-3">
         <span className="flex items-center gap-1.5">
-            {/* Point bleu discret — personne connectée */}
-            {isActive && <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />}
-            <span className={cn(
-              "text-[14px] md:text-[15px] tracking-tight",
-              isActive ? "font-bold text-gray-900" : "font-semibold text-gray-900"
-            )}>
-              {personName}
-            </span>
+          {isActive && <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />}
+          <span className={cn(
+            "text-[14px] md:text-[15px] tracking-tight",
+            isActive ? "font-bold text-gray-900" : "font-semibold text-gray-900"
+          )}>
+            {personName}
           </span>
-        {/* 44×44 pt touch target (Apple HIG) — negative margin keeps visual size tight */}
+        </span>
+        {/* Crayon = ajouter */}
         <button
-          onClick={openEdit}
+          onClick={openAdd}
           aria-label="Ajouter un rappel"
           className="flex items-center justify-center -mr-1.5 -mt-1 h-[44px] w-[44px] rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
         >
@@ -115,21 +212,24 @@ function ReminderCard({
         </button>
       </div>
 
-      {/* ── Todo list ── */}
+      {/* ── Liste des todos ── */}
       <div className="flex flex-col gap-1.5">
-        {todos.length === 0 && !editing && (
-          <p className="text-[13px] italic text-gray-300 pl-[22px]">
-            Aucun rappel…
-          </p>
+        {todos.length === 0 && !isAdding && (
+          <p className="text-[13px] italic text-gray-300 pl-[22px]">Aucun rappel…</p>
         )}
 
         {todos.map((todo) => (
           <div
             key={todo.id}
-            onClick={() => setSelectedId((prev) => (prev === todo.id ? null : todo.id))}
-            className="flex items-center gap-2 w-full cursor-pointer rounded-md -mx-1 px-1 py-[3px] hover:bg-gray-50 transition-colors"
+            className={cn(
+              "flex items-center gap-2 w-full rounded-md -mx-1 px-1 py-[3px]",
+              "transition-colors",
+              editingId !== todo.id && "cursor-grab active:cursor-grabbing hover:bg-gray-50",
+            )}
+            draggable={editingId !== todo.id}
+            onDragStart={(e) => handleDragStart(e, todo)}
           >
-            {/* Circle */}
+            {/* Cercle toggle ✓ */}
             <button
               onClick={(e) => { e.stopPropagation(); toggle(todo.id); }}
               className={cn(
@@ -139,39 +239,48 @@ function ReminderCard({
                   : "border-gray-300 hover:border-gray-500"
               )}
             />
-            {/* Text */}
-            <span className={cn(
-              "flex-1 text-[14px] leading-snug transition-all duration-200",
-              todo.done ? "line-through text-gray-300" : "text-gray-700"
-            )}>
-              {todo.text}
-            </span>
-            {/* Delete on click */}
-            {selectedId === todo.id && (
-              <button
-                onClick={(e) => { e.stopPropagation(); remove(todo.id); }}
-                aria-label="Supprimer"
-                className="shrink-0 rounded p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+
+            {/* Texte ou input inline */}
+            {editingId === todo.id ? (
+              <input
+                ref={editInputRef}
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter")  { e.preventDefault(); commitEdit(); }
+                  if (e.key === "Escape") { setEditingId(null); setEditText(""); }
+                }}
+                onBlur={commitEdit}
+                className="flex-1 text-[14px] text-gray-700 bg-transparent outline-none border-b border-blue-400 pb-px"
+              />
+            ) : (
+              <span
+                onClick={() => handleItemClick(todo)}
+                className={cn(
+                  "flex-1 text-[14px] leading-snug select-none",
+                  todo.done ? "line-through text-gray-300" : "text-gray-700"
+                )}
+                title="Clic → éditer · Double-clic → supprimer · Glisser → déplacer"
               >
-                <X size={11} strokeWidth={2} />
-              </button>
+                {todo.text}
+              </span>
             )}
           </div>
         ))}
 
-        {/* Inline add input */}
-        {editing && (
+        {/* Input ajout rapide */}
+        {isAdding && (
           <div className="flex items-center gap-2 mt-0.5">
             <span className="shrink-0 h-[14px] w-[14px] rounded-full border border-gray-200" />
             <input
-              ref={inputRef}
+              ref={addInputRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter")  commitDraft();
-                if (e.key === "Escape") { setEditing(false); setDraft(""); }
+                if (e.key === "Enter")  { e.preventDefault(); commitDraft(); }
+                if (e.key === "Escape") { setIsAdding(false); setDraft(""); }
               }}
-              onBlur={() => { commitDraft(); setEditing(false); }}
+              onBlur={() => { commitDraft(); setIsAdding(false); }}
               placeholder="Nouveau rappel…"
               className="flex-1 text-[14px] text-gray-700 placeholder:text-gray-300 bg-transparent outline-none"
             />
@@ -182,27 +291,56 @@ function ReminderCard({
   );
 }
 
-// ── Grid export ────────────────────────────────────────────────────────────────
+// ── RemindersGrid ──────────────────────────────────────────────────────────────
 
 export function RemindersGrid({
   notesMap,
   activeUser,
 }: {
-  notesMap: Record<string, TodoItem[]>;
-  /** Clé de la personne connectée (ex: "loic") — sa carte est mise en valeur */
+  notesMap:    Record<string, TodoItem[]>;
   activeUser?: string;
 }) {
+  // State remonté pour les déplacements cross-card
+  const [todosMap, setTodosMap] = useState<Record<string, TodoItem[]>>(() => {
+    const m: Record<string, TodoItem[]> = {};
+    for (const p of PEOPLE) m[p.key] = notesMap[p.key] ?? [];
+    return m;
+  });
+
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  // Mise à jour locale + persist debounced
+  const handleUpdate = useCallback((key: string, next: TodoItem[]) => {
+    setTodosMap(prev => ({ ...prev, [key]: next }));
+    if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
+    saveTimers.current[key] = setTimeout(() => apiSave(key, next), 600);
+  }, []);
+
+  // Déplacement cross-card (drag & drop)
+  const handleReceiveTodo = useCallback((fromKey: PersonKey, toKey: string, todoId: string) => {
+    setTodosMap(prev => {
+      const todo = prev[fromKey]?.find(t => t.id === todoId);
+      if (!todo) return prev;
+      const nextFrom = prev[fromKey].filter(t => t.id !== todoId);
+      const nextTo   = [...(prev[toKey] ?? []), { ...todo, done: false }];
+      // Persist les deux fiches
+      apiSave(fromKey, nextFrom);
+      apiSave(toKey,   nextTo);
+      return { ...prev, [fromKey]: nextFrom, [toKey]: nextTo };
+    });
+  }, []);
+
   return (
-    // 2-col compact grid on mobile, 4-col on lg+
-    // No negative-margin bleed (backdrop-blur on parent clips overflow in WebKit)
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {PEOPLE.map((p) => (
         <ReminderCard
           key={p.key}
           personKey={p.key}
           personName={p.name}
-          initialTodos={notesMap[p.key] ?? []}
+          todos={todosMap[p.key] ?? []}
           isActive={p.key === activeUser}
+          onUpdate={(next) => handleUpdate(p.key, next)}
+          onReceiveTodo={(fromKey, todoId) => handleReceiveTodo(fromKey, p.key, todoId)}
         />
       ))}
     </div>
