@@ -12,15 +12,7 @@ import { useState, useCallback, useMemo, useEffect } from "react";
 import { motion, Reorder, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-export interface WorkflowItem {
-  id: string;
-  listType: "ACHAT" | "STANDARD" | "ATELIER" | "DTF";
-  title: string;
-  position: number;
-  createdAt: string;
-  updatedAt: string;
-}
+import type { WorkflowItem } from "@/types/order";
 
 const LIST_CONFIGS = {
   ACHAT: { title: "ACHAT", color: "bg-blue-50", dotColor: "bg-blue-400", borderColor: "border-blue-200" },
@@ -82,8 +74,7 @@ function WorkflowItemRow({
         dragMomentum={false}
         onDragEnd={handleDragEnd}
         onDragStart={() => setIsDragging(true)}
-        x={x}
-        style={{ opacity, scale }}
+        style={{ opacity, scale, x }}
         className="relative z-10"
       >
         <div
