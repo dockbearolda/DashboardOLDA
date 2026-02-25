@@ -1,30 +1,34 @@
 "use client";
 
 /**
- * WorkflowList — Premium Drag & Drop + Swipe-to-Delete
- * ─ 4 listes indépendantes : Achat, Standard, Atelier, DTF
- * ─ Drag & drop vertical avec sauvegarde position en DB
- * ─ Swipe-to-delete : glisse vers l'extérieur pour supprimer
- * ─ Design Apple : 18px radius, Inter, antialiased, light
+ * WorkflowList — Ultra-fast Task Lists with Inline Editing
+ * ─ 4 listes : Achat, Standard, Atelier, DTF
+ * ─ Édition inline : clic sur le texte pour modifier
+ * ─ Ajout rapide : champ minimaliste en bas (Enter pour ajouter)
+ * ─ Drag & drop vertical avec position sauvegardée en DB
+ * ─ Swipe-to-delete : glisse vers l'extérieur, animation rouge fluide
+ * ─ Design Apple : Inter, 18px radius, antialiased, ombres légères
  */
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { motion, Reorder, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
-import { Trash2 } from "lucide-react";
+import { Trash2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkflowItem } from "@/types/order";
 
 const LIST_CONFIGS = {
-  ACHAT: { title: "ACHAT", color: "bg-blue-50", dotColor: "bg-blue-400", borderColor: "border-blue-200" },
-  STANDARD: { title: "STANDARD", color: "bg-amber-50", dotColor: "bg-amber-400", borderColor: "border-amber-200" },
-  ATELIER: { title: "ATELIER", color: "bg-purple-50", dotColor: "bg-purple-400", borderColor: "border-purple-200" },
-  DTF: { title: "DTF", color: "bg-rose-50", dotColor: "bg-rose-400", borderColor: "border-rose-200" },
+  ACHAT: { title: "ACHAT", color: "bg-blue-50", dotColor: "bg-blue-500", borderColor: "border-blue-100" },
+  STANDARD: { title: "STANDARD", color: "bg-amber-50", dotColor: "bg-amber-500", borderColor: "border-amber-100" },
+  ATELIER: { title: "ATELIER", color: "bg-purple-50", dotColor: "bg-purple-500", borderColor: "border-purple-100" },
+  DTF: { title: "DTF", color: "bg-rose-50", dotColor: "bg-rose-500", borderColor: "border-rose-100" },
 } as const;
 
 interface WorkflowListProps {
   items: WorkflowItem[];
   onReorder: (items: WorkflowItem[]) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onUpdate: (id: string, title: string) => Promise<void>;
+  onCreate: (title: string, listType: WorkflowItem["listType"]) => Promise<void>;
   listType: WorkflowItem["listType"];
   isLoading?: boolean;
 }
@@ -32,32 +36,58 @@ interface WorkflowListProps {
 function WorkflowItemRow({
   item,
   onDelete,
+  onUpdate,
   isDeleting,
 }: {
   item: WorkflowItem;
   onDelete: (id: string) => Promise<void>;
+  onUpdate: (title: string) => Promise<void>;
   isDeleting: boolean;
 }) {
   const x = useMotionValue(0);
-  const opacity = useTransform(x, [-120, -60, 0], [0, 0.5, 1]);
-  const scale = useTransform(x, [-120, 0], [0.8, 1]);
+  const opacity = useTransform(x, [-100, -50, 0], [0, 0.6, 1]);
+  const scale = useTransform(x, [-100, 0], [0.85, 1]);
   const [isDragging, setIsDragging] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(item.title);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleDelete = useCallback(async () => {
-    // Animate out before deleting
     await animate(x, -150, { duration: 0.2 });
     await onDelete(item.id);
   }, [item.id, onDelete, x]);
 
   const handleDragEnd = useCallback(() => {
     const currentX = x.get();
-    if (currentX < -60) {
+    if (currentX < -50) {
       handleDelete();
     } else {
-      // Snap back
       animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
     }
   }, [handleDelete, x]);
+
+  const handleEditStart = useCallback(() => {
+    setIsEditing(true);
+    setEditValue(item.title);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, [item.title]);
+
+  const handleEditEnd = useCallback(async () => {
+    if (editValue.trim() && editValue !== item.title) {
+      try {
+        await onUpdate(editValue.trim());
+      } catch (err) {
+        console.error("Failed to update title:", err);
+        setEditValue(item.title);
+      }
+    }
+    setIsEditing(false);
+  }, [editValue, item.title, onUpdate]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter") handleEditEnd();
+    if (e.key === "Escape") setIsEditing(false);
+  }, [handleEditEnd]);
 
   return (
     <motion.div
@@ -68,56 +98,140 @@ function WorkflowItemRow({
       transition={{ duration: 0.2 }}
       className="relative"
     >
+      {/* Delete background (appears when swiping left) */}
+      {isDragging && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 flex items-center justify-end px-4 rounded-[14px] bg-red-50 border border-red-200"
+        >
+          <Trash2 className="h-4 w-4 text-red-500" />
+        </motion.div>
+      )}
+
+      {/* Draggable item */}
       <motion.div
         drag="x"
         dragElastic={0.2}
         dragMomentum={false}
         onDragEnd={handleDragEnd}
         onDragStart={() => setIsDragging(true)}
+        onDragCapture={() => setIsDragging(true)}
         style={{ opacity, scale, x }}
         className="relative z-10"
       >
         <div
           className={cn(
-            "flex items-center gap-3 px-4 py-3 rounded-[16px] bg-white border border-gray-200 cursor-grab active:cursor-grabbing",
-            "transition-all hover:shadow-md hover:border-gray-300",
+            "flex items-center gap-2.5 px-3.5 py-2.5 rounded-[14px] bg-white border border-gray-100",
+            "transition-all hover:border-gray-200 hover:shadow-sm",
+            "cursor-grab active:cursor-grabbing",
             isDeleting && "opacity-50"
           )}
         >
           {/* Drag handle */}
-          <div className="flex flex-col gap-1 shrink-0">
-            <div className="w-1 h-1 rounded-full bg-gray-300" />
-            <div className="w-1 h-1 rounded-full bg-gray-300" />
-            <div className="w-1 h-1 rounded-full bg-gray-300" />
+          <div className="flex flex-col gap-0.5 shrink-0">
+            <div className="w-0.5 h-0.5 rounded-full bg-gray-300" />
+            <div className="w-0.5 h-0.5 rounded-full bg-gray-300" />
+            <div className="w-0.5 h-0.5 rounded-full bg-gray-300" />
           </div>
 
-          {/* Title */}
-          <span className="flex-1 text-sm font-medium text-gray-900 truncate" style={{
-            fontFamily: "'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
-            WebkitFontSmoothing: "antialiased",
-            MozOsxFontSmoothing: "grayscale",
-          }}>
-            {item.title}
-          </span>
+          {/* Content */}
+          {isEditing ? (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleEditEnd}
+              onKeyDown={handleKeyDown}
+              className="flex-1 text-sm font-medium text-gray-900 bg-transparent border-b border-gray-200 focus:outline-none focus:border-gray-400 px-0 py-0"
+              style={{
+                fontFamily: "'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
+                WebkitFontSmoothing: "antialiased",
+                MozOsxFontSmoothing: "grayscale",
+              }}
+            />
+          ) : (
+            <span
+              onClick={handleEditStart}
+              className="flex-1 text-sm font-medium text-gray-900 cursor-text hover:text-gray-700 transition-colors truncate"
+              style={{
+                fontFamily: "'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
+                WebkitFontSmoothing: "antialiased",
+                MozOsxFontSmoothing: "grayscale",
+              }}
+            >
+              {item.title}
+            </span>
+          )}
         </div>
       </motion.div>
-
-      {/* Delete indicator (under the dragging item) */}
-      {isDragging && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="absolute inset-0 flex items-center justify-end px-4 rounded-[16px] bg-red-50 border border-red-200"
-        >
-          <Trash2 className="h-5 w-5 text-red-500" />
-        </motion.div>
-      )}
     </motion.div>
   );
 }
 
-export function WorkflowListColumn({ items, onReorder, onDelete, listType, isLoading }: WorkflowListProps) {
+function AddItemInput({
+  listType,
+  onCreate,
+  isCreating,
+}: {
+  listType: WorkflowItem["listType"];
+  onCreate: (title: string) => Promise<void>;
+  isCreating: boolean;
+}) {
+  const [value, setValue] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleCreate = useCallback(async () => {
+    if (!value.trim()) return;
+    setIsLoading(true);
+    try {
+      await onCreate(value.trim());
+      setValue("");
+    } catch (err) {
+      console.error("Failed to create item:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [value, onCreate]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && !isLoading) {
+      handleCreate();
+    }
+  }, [handleCreate, isLoading]);
+
+  return (
+    <div className="flex items-center gap-2 px-3.5 py-2 rounded-[14px] bg-gray-50 border border-gray-100 hover:bg-gray-100 transition-colors">
+      <Plus className="h-4 w-4 text-gray-400 shrink-0" />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Ajouter une tâche..."
+        disabled={isLoading}
+        className="flex-1 text-sm text-gray-700 bg-transparent border-none focus:outline-none placeholder-gray-400 disabled:opacity-50"
+        style={{
+          fontFamily: "'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
+          WebkitFontSmoothing: "antialiased",
+          MozOsxFontSmoothing: "grayscale",
+        }}
+      />
+    </div>
+  );
+}
+
+export function WorkflowListColumn({
+  items,
+  onReorder,
+  onDelete,
+  onUpdate,
+  onCreate,
+  listType,
+  isLoading,
+}: WorkflowListProps) {
   const config = LIST_CONFIGS[listType];
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
@@ -135,6 +249,14 @@ export function WorkflowListColumn({ items, onReorder, onDelete, listType, isLoa
     }
   }, [onDelete]);
 
+  const handleUpdateItem = useCallback(async (id: string, title: string) => {
+    try {
+      await onUpdate(id, title);
+    } catch (err) {
+      console.error("Failed to update item:", err);
+    }
+  }, [onUpdate]);
+
   const handleReorder = useCallback(async (newOrder: WorkflowItem[]) => {
     try {
       await onReorder(newOrder);
@@ -143,62 +265,77 @@ export function WorkflowListColumn({ items, onReorder, onDelete, listType, isLoa
     }
   }, [onReorder]);
 
+  const handleCreate = useCallback(async (title: string) => {
+    try {
+      await onCreate(title, listType);
+    } catch (err) {
+      console.error("Failed to create item:", err);
+    }
+  }, [onCreate, listType]);
+
   return (
-    <div className="flex-1 min-w-[280px] flex flex-col gap-3">
+    <div className="flex-1 min-w-[300px] max-w-[400px] flex flex-col gap-3">
       {/* Header */}
       <div className={cn("rounded-[18px] px-4 py-3 flex items-center justify-between", config.color)}>
-        <div className="flex items-center gap-2">
-          <span className={cn("h-2 w-2 rounded-full", config.dotColor)} />
+        <div className="flex items-center gap-2.5">
+          <span className={cn("h-2.5 w-2.5 rounded-full", config.dotColor)} />
           <span
-            className="text-sm font-semibold text-gray-900 uppercase tracking-wide"
+            className="text-xs font-bold text-gray-900 uppercase tracking-wider"
             style={{
               fontFamily: "'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
               WebkitFontSmoothing: "antialiased",
               MozOsxFontSmoothing: "grayscale",
+              letterSpacing: "0.05em",
             }}
           >
             {config.title}
           </span>
         </div>
-        <span className="text-xs font-semibold text-gray-500 px-2.5 py-1 rounded-full bg-white/50">
+        <span className="text-xs font-semibold text-gray-600 px-2.5 py-1 rounded-full bg-white/40">
           {items.length}
         </span>
       </div>
 
-      {/* Items */}
-      <Reorder.Group
-        axis="y"
-        values={items}
-        onReorder={handleReorder}
-        className="flex flex-col gap-2 rounded-[18px] p-3 bg-gray-50/50"
-      >
-        <AnimatePresence mode="popLayout">
-          {items.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex items-center justify-center py-12 text-gray-300 text-sm"
-            >
-              Vide
-            </motion.div>
-          ) : (
-            items.map((item) => (
-              <Reorder.Item
-                key={item.id}
-                value={item}
-                className="rounded-[16px]"
+      {/* Items container */}
+      <div className="flex-1 flex flex-col gap-2 rounded-[18px] p-3 bg-white/50 border border-gray-100 min-h-[200px]">
+        <Reorder.Group
+          axis="y"
+          values={items}
+          onReorder={handleReorder}
+          className="flex flex-col gap-2 flex-1"
+        >
+          <AnimatePresence mode="popLayout">
+            {items.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center justify-center py-8 text-gray-300 text-sm flex-1"
               >
-                <WorkflowItemRow
-                  item={item}
-                  onDelete={handleDeleteItem}
-                  isDeleting={deletingIds.has(item.id)}
-                />
-              </Reorder.Item>
-            ))
-          )}
-        </AnimatePresence>
-      </Reorder.Group>
+                Aucune tâche
+              </motion.div>
+            ) : (
+              items.map((item) => (
+                <Reorder.Item key={item.id} value={item}>
+                  <WorkflowItemRow
+                    item={item}
+                    onDelete={(id) => handleDeleteItem(id)}
+                    onUpdate={(title) => handleUpdateItem(item.id, title)}
+                    isDeleting={deletingIds.has(item.id)}
+                  />
+                </Reorder.Item>
+              ))
+            )}
+          </AnimatePresence>
+        </Reorder.Group>
+
+        {/* Add item input at bottom */}
+        <AddItemInput
+          listType={listType}
+          onCreate={handleCreate}
+          isCreating={false}
+        />
+      </div>
     </div>
   );
 }
@@ -231,20 +368,17 @@ export function WorkflowListsGrid({ items, onItemsChange, isLoading }: WorkflowL
 
   const handleReorder = useCallback(
     async (listType: WorkflowItem["listType"], newItems: WorkflowItem[]) => {
-      // Update positions
       const updatedItems = newItems.map((item, idx) => ({
         ...item,
         position: idx,
       }));
 
-      // Update local state
       const allItems = [
         ...updatedItems,
         ...items.filter((i) => i.listType !== listType),
       ];
       onItemsChange?.(allItems);
 
-      // Save to API
       try {
         await Promise.all(
           updatedItems.map((item) =>
@@ -269,10 +403,47 @@ export function WorkflowListsGrid({ items, onItemsChange, isLoading }: WorkflowL
         await fetch(`/api/workflow-items/${itemId}`, { method: "DELETE" });
       } catch (err) {
         console.error("Failed to delete item:", err);
-        // Re-fetch on error
         const res = await fetch("/api/workflow-items");
         const data = await res.json();
         onItemsChange?.(data.items ?? []);
+      }
+    },
+    [items, onItemsChange]
+  );
+
+  const handleUpdate = useCallback(
+    async (itemId: string, title: string) => {
+      onItemsChange?.(
+        items.map((i) => (i.id === itemId ? { ...i, title } : i))
+      );
+      try {
+        await fetch(`/api/workflow-items/${itemId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+      } catch (err) {
+        console.error("Failed to update item:", err);
+        const res = await fetch("/api/workflow-items");
+        const data = await res.json();
+        onItemsChange?.(data.items ?? []);
+      }
+    },
+    [items, onItemsChange]
+  );
+
+  const handleCreate = useCallback(
+    async (title: string, listType: WorkflowItem["listType"]) => {
+      try {
+        const res = await fetch("/api/workflow-items", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ listType, title }),
+        });
+        const data = await res.json();
+        onItemsChange?.([...items, data.item]);
+      } catch (err) {
+        console.error("Failed to create item:", err);
       }
     },
     [items, onItemsChange]
@@ -287,6 +458,8 @@ export function WorkflowListsGrid({ items, onItemsChange, isLoading }: WorkflowL
           items={groupedItems[listType]}
           onReorder={(newItems) => handleReorder(listType, newItems)}
           onDelete={handleDelete}
+          onUpdate={handleUpdate}
+          onCreate={handleCreate}
           isLoading={isLoading}
         />
       ))}
