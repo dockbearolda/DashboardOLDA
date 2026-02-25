@@ -526,14 +526,12 @@ export function TshirtOrderCard({ order: initialOrder, isNew, onDelete, compact 
           >
             <Pencil className="h-2.5 w-2.5 text-gray-400" />
           </button>
-          {/* Supprimer — confirm avant action */}
+          {/* Supprimer — action directe sans confirmation */}
           {onDelete && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (window.confirm(`Supprimer la commande de ${order.customerName} ?\nCette action est irréversible.`)) {
-                  onDelete();
-                }
+                onDelete();
               }}
               title="Supprimer la commande"
               className="h-5 w-5 rounded-full flex items-center justify-center bg-white border border-gray-200 shadow-sm hover:bg-red-50 hover:border-red-300 transition-colors"
