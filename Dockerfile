@@ -67,4 +67,4 @@ ENV HOSTNAME="0.0.0.0"
 # 1. Migrate enum English→French directly in DB (idempotent, skips if already French)
 # 2. db push sees zero schema drift → exits immediately
 # 3. Start app
-CMD ["sh", "-c", "node scripts/db-resolve.mjs && node_modules/.bin/prisma db push && node server.js"]
+CMD ["sh", "-c", "node scripts/db-resolve.mjs && node_modules/.bin/prisma db push --accept-data-loss && node server.js"]
