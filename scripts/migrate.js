@@ -1,86 +1,208 @@
 #!/usr/bin/env node
 /**
- * Migration handler that resolves P3005 baseline issues
- * Handles cases where database schema exists but migration history doesn't
+ * Migration handler that resolves Prisma P3005 baseline issues.
+ *
+ * P3005 occurs when the database schema is not empty but the _prisma_migrations
+ * table does not exist (schema was created via db push, not migrate).
+ *
+ * Strategy:
+ * 1. Try prisma migrate deploy normally
+ * 2. If P3005: mark the baseline migration as applied via PrismaClient raw SQL
+ * 3. Retry prisma migrate deploy (which will now apply the refactor migration)
+ * 4. If deploy fails because refactor columns already exist: mark refactor as applied too
+ * 5. Final deploy (no-op if everything is now aligned)
  */
 
-const { spawn } = require('child_process');
+const { spawnSync } = require('child_process');
+const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 
-const IS_DEV = process.env.NODE_ENV !== 'production';
+const CWD = path.join(__dirname, '..');
+const MIGRATIONS_DIR = path.join(CWD, 'prisma', 'migrations');
 
-function runCommand(cmd, args = []) {
-  return new Promise((resolve, reject) => {
-    const proc = spawn(cmd, args, {
-      stdio: 'inherit',
-      shell: true,
-      cwd: path.join(__dirname, '..'),
-    });
-
-    proc.on('close', (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`Command failed with code ${code}: ${cmd} ${args.join(' ')}`));
-      }
-    });
-
-    proc.on('error', reject);
+/** Run a command, always printing output, returning {ok, output} */
+function run(cmd, args) {
+  const result = spawnSync(cmd, args, {
+    cwd: CWD,
+    encoding: 'utf8',
+    stdio: ['inherit', 'pipe', 'pipe'],
   });
+
+  const stdout = result.stdout || '';
+  const stderr = result.stderr || '';
+
+  if (stdout) process.stdout.write(stdout);
+  if (stderr) process.stderr.write(stderr);
+
+  return {
+    ok: result.status === 0,
+    output: stdout + stderr,
+  };
 }
 
-async function main() {
+/** Compute SHA-256 checksum of a file (Prisma's format) */
+function fileChecksum(filePath) {
+  const content = fs.readFileSync(filePath, 'utf8');
+  return crypto.createHash('sha256').update(content).digest('hex');
+}
+
+/** Generate a UUID v4 compatible string */
+function newId() {
+  const bytes = crypto.randomBytes(16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32),
+  ].join('-');
+}
+
+/** Get sorted list of migration folder names */
+function getMigrationFolders() {
+  return fs
+    .readdirSync(MIGRATIONS_DIR)
+    .filter(
+      (f) =>
+        fs.statSync(path.join(MIGRATIONS_DIR, f)).isDirectory() &&
+        fs.existsSync(path.join(MIGRATIONS_DIR, f, 'migration.sql'))
+    )
+    .sort();
+}
+
+/**
+ * Use PrismaClient to create _prisma_migrations table and
+ * register one or more migrations as already applied.
+ */
+async function registerMigrationsAsApplied(migrationNames) {
+  // Lazy-require so we only load PrismaClient when needed
+  const { PrismaClient } = require('@prisma/client');
+  const prisma = new PrismaClient();
+
   try {
-    console.log('🔄 Starting Prisma migration...\n');
+    // Create the table Prisma uses to track migrations
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
+        "id"                  VARCHAR(36)  NOT NULL,
+        "checksum"            VARCHAR(64)  NOT NULL,
+        "finished_at"         TIMESTAMPTZ,
+        "migration_name"      VARCHAR(255) NOT NULL,
+        "logs"                TEXT,
+        "rolled_back_at"      TIMESTAMPTZ,
+        "started_at"          TIMESTAMPTZ NOT NULL DEFAULT now(),
+        "applied_steps_count" INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY ("id")
+      )
+    `);
 
-    // First attempt: standard migrate deploy
-    try {
-      await runCommand('npx', ['prisma', 'migrate', 'deploy']);
-      console.log('\n✅ Migration succeeded on first attempt\n');
-      process.exit(0);
-    } catch (error) {
-      // Check if it's the P3005 baseline error
-      if (error.message.includes('P3005') || error.message.includes('schema is not empty')) {
-        console.log('\n⚠️  P3005 error detected - establishing migration baseline...\n');
+    for (const name of migrationNames) {
+      const sqlFile = path.join(MIGRATIONS_DIR, name, 'migration.sql');
+      const checksum = fileChecksum(sqlFile);
 
-        // Try to resolve with baseline
-        try {
-          // Attempt to mark both migrations as already applied
-          console.log('  → Resolving baseline migrations...');
+      // Only insert if not already recorded (no unique constraint on name, use SELECT)
+      const rows = await prisma.$queryRawUnsafe(
+        `SELECT "id" FROM "_prisma_migrations" WHERE "migration_name" = $1 LIMIT 1`,
+        name
+      );
 
-          // Note: These might fail if DATABASE_URL isn't accessible, which is ok
-          // We'll handle that in the next step
-          try {
-            await runCommand('npx', ['prisma', 'migrate', 'resolve', '--applied', '0_init_baseline']);
-          } catch (e) {
-            console.log('    (baseline resolve skipped)');
-          }
-
-          try {
-            await runCommand('npx', ['prisma', 'migrate', 'resolve', '--applied', '1772079457_refactor_order_items']);
-          } catch (e) {
-            console.log('    (refactor resolve skipped)');
-          }
-
-          // Try migrate deploy again
-          console.log('  → Retrying migrate deploy...');
-          await runCommand('npx', ['prisma', 'migrate', 'deploy']);
-          console.log('\n✅ Migration succeeded after baseline resolution\n');
-          process.exit(0);
-        } catch (fallbackError) {
-          console.error('\n❌ Migration failed even after baseline attempt');
-          console.error(fallbackError.message);
-          process.exit(1);
-        }
+      if (rows.length === 0) {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO "_prisma_migrations"
+             ("id", "checksum", "finished_at", "migration_name", "logs", "rolled_back_at", "started_at", "applied_steps_count")
+           VALUES ($1, $2, NOW(), $3, NULL, NULL, NOW(), 1)`,
+          newId(),
+          checksum,
+          name
+        );
+        console.log(`  ✓ Registered as applied: ${name}`);
       } else {
-        throw error;
+        console.log(`  ✓ Already registered:    ${name}`);
       }
     }
-  } catch (error) {
-    console.error('\n❌ Migration error:');
-    console.error(error.message);
-    process.exit(1);
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
-main();
+async function main() {
+  console.log('🔄 Starting Prisma migration...\n');
+
+  const allMigrations = getMigrationFolders();
+  const [baseline, ...rest] = allMigrations;
+
+  // ─── Attempt 1: standard deploy ──────────────────────────────────────────
+  const attempt1 = run('npx', ['prisma', 'migrate', 'deploy']);
+  if (attempt1.ok) {
+    console.log('\n✅ Migration complete\n');
+    process.exit(0);
+  }
+
+  const isP3005 =
+    attempt1.output.includes('P3005') ||
+    attempt1.output.includes('schema is not empty');
+
+  if (!isP3005) {
+    console.error('\n❌ Migration failed (unexpected error, not P3005)\n');
+    process.exit(1);
+  }
+
+  // ─── P3005 recovery: register baseline as applied ────────────────────────
+  console.log(`\n⚠️  P3005 detected — establishing baseline: ${baseline}\n`);
+  try {
+    await registerMigrationsAsApplied([baseline]);
+  } catch (err) {
+    console.error('\n❌ Failed to register baseline migration:', err.message);
+    process.exit(1);
+  }
+
+  // ─── Attempt 2: deploy after baseline (applies remaining migrations) ─────
+  console.log('\n  Retrying migrate deploy...\n');
+  const attempt2 = run('npx', ['prisma', 'migrate', 'deploy']);
+  if (attempt2.ok) {
+    console.log('\n✅ Migration complete after baseline\n');
+    process.exit(0);
+  }
+
+  // If attempt 2 fails, the remaining migrations may already be applied
+  // (e.g., schema was created with db push using the latest schema).
+  // Register ALL migrations as applied and do a final no-op deploy.
+  const alreadyApplied =
+    attempt2.output.includes('already exists') ||
+    attempt2.output.includes('duplicate column') ||
+    attempt2.output.includes('42701'); // PostgreSQL "duplicate_column" error code
+
+  if (!alreadyApplied && rest.length > 0) {
+    console.error(
+      '\n❌ Migration failed after baseline (not a duplicate-column error)\n'
+    );
+    process.exit(1);
+  }
+
+  console.log('\n  Schema appears up-to-date — registering remaining migrations...\n');
+  try {
+    await registerMigrationsAsApplied(rest);
+  } catch (err) {
+    console.error('\n❌ Failed to register remaining migrations:', err.message);
+    process.exit(1);
+  }
+
+  // ─── Attempt 3: final deploy (should be a clean no-op) ───────────────────
+  console.log('\n  Final migrate deploy (no-op expected)...\n');
+  const attempt3 = run('npx', ['prisma', 'migrate', 'deploy']);
+  if (attempt3.ok) {
+    console.log('\n✅ Migration complete (all migrations baseline-registered)\n');
+    process.exit(0);
+  }
+
+  console.error('\n❌ Migration failed after full baseline registration\n');
+  process.exit(1);
+}
+
+main().catch((err) => {
+  console.error('\n❌ Unexpected error:', err.message);
+  process.exit(1);
+});
