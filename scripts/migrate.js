@@ -75,17 +75,17 @@ function getMigrationFolders() {
 }
 
 /**
- * Use PrismaClient to create _prisma_migrations table and
- * register one or more migrations as already applied.
+ * Use the `pg` package (production dependency, no code generation needed)
+ * to create _prisma_migrations table and register migrations as applied.
  */
 async function registerMigrationsAsApplied(migrationNames) {
-  // Lazy-require so we only load PrismaClient when needed
-  const { PrismaClient } = require('@prisma/client');
-  const prisma = new PrismaClient();
+  const { Pool } = require('pg');
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const client = await pool.connect();
 
   try {
     // Create the table Prisma uses to track migrations
-    await prisma.$executeRawUnsafe(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
         "id"                  VARCHAR(36)  NOT NULL,
         "checksum"            VARCHAR(64)  NOT NULL,
@@ -103,20 +103,18 @@ async function registerMigrationsAsApplied(migrationNames) {
       const sqlFile = path.join(MIGRATIONS_DIR, name, 'migration.sql');
       const checksum = fileChecksum(sqlFile);
 
-      // Only insert if not already recorded (no unique constraint on name, use SELECT)
-      const rows = await prisma.$queryRawUnsafe(
+      // Only insert if not already recorded (no unique constraint on name, so use SELECT first)
+      const { rows } = await client.query(
         `SELECT "id" FROM "_prisma_migrations" WHERE "migration_name" = $1 LIMIT 1`,
-        name
+        [name]
       );
 
       if (rows.length === 0) {
-        await prisma.$executeRawUnsafe(
+        await client.query(
           `INSERT INTO "_prisma_migrations"
              ("id", "checksum", "finished_at", "migration_name", "logs", "rolled_back_at", "started_at", "applied_steps_count")
            VALUES ($1, $2, NOW(), $3, NULL, NULL, NOW(), 1)`,
-          newId(),
-          checksum,
-          name
+          [newId(), checksum, name]
         );
         console.log(`  ✓ Registered as applied: ${name}`);
       } else {
@@ -124,7 +122,8 @@ async function registerMigrationsAsApplied(migrationNames) {
       }
     }
   } finally {
-    await prisma.$disconnect();
+    client.release();
+    await pool.end();
   }
 }
 
