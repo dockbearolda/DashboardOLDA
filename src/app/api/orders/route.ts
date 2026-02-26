@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { WebhookOrderPayload, OldaCommandePayload, OldaExtraData } from "@/types/order";
+import { WebhookOrderPayload, OldaCommandePayload, OldaExtraData, OldaArticle } from "@/types/order";
 import { orderEvents } from "@/lib/events";
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
@@ -86,14 +86,31 @@ function mapOldaToWebhook(o: OldaCommandePayload): WebhookOrderPayload {
     prt:        o.prt,
     prix:       o.prix,
     paiement:   o.paiement,
+    articles:   o.articles,   // Multi-articles (panier)
   };
 
   // Items : visuels DTF comme articles pour la détection côté kanban
+  // Si articles[] présent → un item par article, sinon format historique
   const items: WebhookOrderPayload["items"] = [];
-  const va = o.fiche?.visuelAvant;
-  const var2 = o.fiche?.visuelArriere;
-  if (va)   items.push({ name: "Logo Avant",   sku: va,   quantity: 1, price: 0 });
-  if (var2) items.push({ name: "Logo Arrière", sku: var2, quantity: 1, price: 0 });
+
+  if (o.articles && o.articles.length > 0) {
+    // Nouveau format multi-articles
+    for (const article of o.articles as OldaArticle[]) {
+      const va   = article.fiche?.visuelAvant;
+      const varr = article.fiche?.visuelArriere;
+      const ref  = article.reference ?? "Article";
+      if (va)   items.push({ name: `${ref} – Avant`,   sku: va,   quantity: 1, price: 0 });
+      if (varr) items.push({ name: `${ref} – Arrière`, sku: varr, quantity: 1, price: 0 });
+      if (!va && !varr) items.push({ name: ref, sku: article.reference, quantity: 1, price: 0 });
+    }
+  } else {
+    // Format historique : fiche unique au niveau commande
+    const va   = o.fiche?.visuelAvant;
+    const var2 = o.fiche?.visuelArriere;
+    if (va)   items.push({ name: "Logo Avant",   sku: va,   quantity: 1, price: 0 });
+    if (var2) items.push({ name: "Logo Arrière", sku: var2, quantity: 1, price: 0 });
+  }
+
   if (items.length === 0) {
     items.push({ name: o.reference ?? "Commande T-shirt", sku: o.reference, quantity: 1, price: totalAmt });
   }

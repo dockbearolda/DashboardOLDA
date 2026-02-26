@@ -15,7 +15,7 @@ import { X, Upload, Printer, Pencil, ChevronDown } from "lucide-react";
 import { format, differenceInCalendarDays } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import type { Order, OrderItem, OldaExtraData } from "@/types/order";
+import type { Order, OrderItem, OldaExtraData, OldaArticle } from "@/types/order";
 
 // ── Font stack ────────────────────────────────────────────────────────────────
 const SF = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif";
@@ -73,6 +73,34 @@ function readExtra(order: Order): OldaExtraData {
 function isDtfCode(s: string | undefined | null): boolean {
   if (!s) return false;
   return !s.startsWith("http") && !s.startsWith("data:");
+}
+
+/**
+ * Normalise les données en un tableau d'articles uniforme.
+ * — Nouveau format : extra.articles[]
+ * — Ancien format  : extra.fiche / extra.prt / extra.reference (1 seul article)
+ * Toujours rétrocompatible.
+ */
+function normalizeArticles(extra: OldaExtraData, fallbackImages: string[]): OldaArticle[] {
+  if (extra.articles && extra.articles.length > 0) return extra.articles;
+
+  const hasSingleData = extra.fiche || extra.reference || extra.taille || extra.prt;
+  if (!hasSingleData && fallbackImages.length === 0) return [];
+
+  return [{
+    reference:  extra.reference,
+    taille:     extra.taille,
+    collection: extra.collection,
+    note:       extra.note,
+    fiche: extra.fiche ?? (fallbackImages.length > 0 ? {
+      visuelAvant:  fallbackImages[0],
+      visuelArriere: fallbackImages[1],
+    } : undefined),
+    prt:  extra.prt,
+    prix: extra.prix
+      ? { tshirt: extra.prix.tshirt, personnalisation: extra.prix.personnalisation }
+      : undefined,
+  }];
 }
 
 // ── Patch payload ─────────────────────────────────────────────────────────────
@@ -157,10 +185,8 @@ function PrintModal({
   const prenom = nameParts[0] ?? "";
   const nom = nameParts.slice(1).join(" ") || prenom;
 
-  const logoAvant = extra.fiche?.visuelAvant ?? images[0] ?? null;
-  const logoArriere = extra.fiche?.visuelArriere ?? images[1] ?? null;
+  const printArticles = normalizeArticles(extra, images);
   const deadlineTxt = deadlineLabel(extra.limit);
-  const prt = extra.prt;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -300,34 +326,92 @@ function PrintModal({
           {/* Séparateur */}
           <div className="mx-5 mt-4 h-px bg-[#E5E5E5]" />
 
-          {/* ── Visuels agrandis pour l'atelier ── */}
-          {(logoAvant || logoArriere) ? (
-            <div className="olda-print-visuals px-5 pt-4 flex gap-4">
-              {([{ src: logoAvant, label: "Avant" }, { src: logoArriere, label: "Arrière" }] as { src: string | null; label: string }[])
-                .filter(v => v.src)
-                .map(({ src, label }) => (
-                  <div key={label} className="flex-1 flex flex-col items-center gap-2">
-                    <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#aeaeb2" }}>
-                      {label}
-                    </p>
-                    {isDtfCode(src!) ? (
-                      <div
-                        className="olda-print-dtf w-full flex items-center justify-center rounded-2xl border border-[#E5E5E5] bg-gray-50 font-mono text-center px-4"
-                        style={{ minHeight: 140, fontSize: 17, fontWeight: 700, color: "#3a3a3c" }}
-                      >
-                        {src}
+          {/* ── Visuels et infos par article ── */}
+          {printArticles.length > 0 ? (
+            <div className="flex flex-col gap-4">
+              {printArticles.map((article, i) => {
+                const av  = article.fiche?.visuelAvant  ?? null;
+                const arr = article.fiche?.visuelArriere ?? null;
+                const artPrt = article.prt;
+                return (
+                  <div key={i}>
+                    {/* Séparateur + label article si multi */}
+                    {printArticles.length > 1 && (
+                      <div className="mx-5 flex items-center gap-3 mt-2">
+                        <div className="flex-1 h-px bg-[#E5E5E5]" />
+                        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#aeaeb2" }}>
+                          Article {i + 1} · {article.reference || article.fiche?.typeProduit || ""}
+                        </p>
+                        <div className="flex-1 h-px bg-[#E5E5E5]" />
                       </div>
-                    ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={src!}
-                        alt={label}
-                        className="w-full object-contain rounded-2xl border border-[#E5E5E5] bg-white"
-                        style={{ maxHeight: 240 }}
-                      />
                     )}
+
+                    {/* Infos produit de l'article */}
+                    {(article.fiche?.typeProduit || article.fiche?.couleur || article.fiche?.tailleDTFAr || article.taille) && (
+                      <div className="px-5 pt-3 flex items-center gap-3 flex-wrap">
+                        {[article.fiche?.typeProduit, article.fiche?.couleur, article.fiche?.tailleDTFAr, article.taille]
+                          .filter(Boolean)
+                          .map((val, j) => (
+                            <span key={j} style={{ fontSize: 13, color: "#3a3a3c", fontWeight: 500 }}>{val}</span>
+                          ))}
+                      </div>
+                    )}
+
+                    {/* Visuels de l'article */}
+                    {(av || arr) ? (
+                      <div className="olda-print-visuals px-5 pt-3 flex gap-4">
+                        {([{ src: av, label: "Avant" }, { src: arr, label: "Arrière" }] as { src: string | null; label: string }[])
+                          .filter(v => v.src)
+                          .map(({ src, label }) => (
+                            <div key={label} className="flex-1 flex flex-col items-center gap-2">
+                              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#aeaeb2" }}>
+                                {label}
+                              </p>
+                              {isDtfCode(src!) ? (
+                                <div
+                                  className="olda-print-dtf w-full flex items-center justify-center rounded-2xl border border-[#E5E5E5] bg-gray-50 font-mono text-center px-4"
+                                  style={{ minHeight: 140, fontSize: 17, fontWeight: 700, color: "#3a3a3c" }}
+                                >
+                                  {src}
+                                </div>
+                              ) : (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={src!}
+                                  alt={label}
+                                  className="w-full object-contain rounded-2xl border border-[#E5E5E5] bg-white"
+                                  style={{ maxHeight: 200 }}
+                                />
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    ) : i === 0 && printArticles.length === 1 ? (
+                      <label className="mx-5 mt-4 flex flex-col items-center justify-center gap-2 h-32 rounded-2xl border border-dashed border-[#E5E5E5] cursor-pointer hover:bg-gray-50 transition-colors">
+                        <input ref={fileInputRef} type="file" accept="image/*" className="sr-only" onChange={handleFileChange} />
+                        <Upload className="h-5 w-5 text-gray-400" />
+                        <span style={{ fontSize: 13, color: "#8e8e93" }}>Ajouter Avant + Arrière</span>
+                      </label>
+                    ) : null}
+
+                    {/* Infos secondaires + PRT de l'article */}
+                    <div className="px-5 pt-2 flex flex-col gap-1">
+                      {article.collection && <p style={{ fontSize: 12, color: "#636366" }}>{article.collection}</p>}
+                      {article.reference && printArticles.length === 1 && <p style={{ fontSize: 11, color: "#aeaeb2", fontFamily: "monospace" }}>{article.reference}</p>}
+                      {article.note && <p style={{ fontSize: 12, color: "#636366", fontStyle: "italic" }}>{article.note}</p>}
+                      {artPrt && Object.values(artPrt).some(v => v) && (
+                        <div className="mt-1 rounded-xl bg-gray-50 border border-[#E5E5E5] px-3 py-2 flex items-center gap-3 flex-wrap">
+                          {[artPrt.refPrt, artPrt.taillePrt, artPrt.quantite && `×${artPrt.quantite}`]
+                            .filter(Boolean)
+                            .map((v, j) => (
+                              <span key={j} style={{ fontSize: 12, color: "#3a3a3c", fontWeight: 600, fontFamily: "monospace" }}>{v}</span>
+                            ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                ))}
+                );
+              })}
             </div>
           ) : (
             <label className="mx-5 mt-4 flex flex-col items-center justify-center gap-2 h-32 rounded-2xl border border-dashed border-[#E5E5E5] cursor-pointer hover:bg-gray-50 transition-colors">
@@ -337,21 +421,12 @@ function PrintModal({
             </label>
           )}
 
-          {/* Infos secondaires + PRT */}
-          <div className="px-5 pt-4 pb-5 flex flex-col gap-1">
-            {extra.collection && <p style={{ fontSize: 12, color: "#636366" }}>{extra.collection}</p>}
-            {extra.reference && <p style={{ fontSize: 11, color: "#aeaeb2", fontFamily: "monospace" }}>{extra.reference}</p>}
-            {order.notes?.trim() && <p style={{ fontSize: 12, color: "#636366", fontStyle: "italic" }}>{order.notes}</p>}
-            {prt && Object.values(prt).some(v => v) && (
-              <div className="mt-2 rounded-xl bg-gray-50 border border-[#E5E5E5] px-3 py-2 flex items-center gap-3 flex-wrap">
-                {[prt.refPrt, prt.taillePrt, prt.quantite && `×${prt.quantite}`]
-                  .filter(Boolean)
-                  .map((v, i) => (
-                    <span key={i} style={{ fontSize: 12, color: "#3a3a3c", fontWeight: 600, fontFamily: "monospace" }}>{v}</span>
-                  ))}
-              </div>
-            )}
-          </div>
+          {/* Note commande globale */}
+          {order.notes?.trim() && !printArticles.some(a => a.note) && (
+            <div className="px-5 pt-1 pb-1">
+              <p style={{ fontSize: 12, color: "#636366", fontStyle: "italic" }}>{order.notes}</p>
+            </div>
+          )}
         </div>
         {/* ══ fin fiche ════════════════════════════════════════════════════════ */}
       </div>
@@ -480,9 +555,9 @@ export function TshirtOrderCard({ order: initialOrder, isNew, onDelete, compact 
   const { localImages, addImage } = useLocalImages(order.id);
   const displayImages = serverImages.length > 0 ? serverImages : localImages;
 
-  const visualAvant    = extra.fiche?.visuelAvant   ?? displayImages[0] ?? null;
-  const visualArriere  = extra.fiche?.visuelArriere ?? displayImages[1] ?? null;
-  const hasVisuals     = !!(visualAvant || visualArriere);
+  // Articles normalisés (multi-articles ou rétrocompat mono-article)
+  const articles   = normalizeArticles(extra, displayImages);
+  const hasVisuals = articles.some(a => a.fiche?.visuelAvant || a.fiche?.visuelArriere);
 
   const [modalOpen,     setModalOpen]     = useState(false);
   const [editOpen,      setEditOpen]      = useState(false);
@@ -491,13 +566,12 @@ export function TshirtOrderCard({ order: initialOrder, isNew, onDelete, compact 
 
   const qrValue    = origin ? `${origin}/dashboard/orders/${order.id}` : order.orderNumber;
   const deadlineTxt = deadlineLabel(extra.limit);
-  const prt         = extra.prt;
   const qrSize      = compact ? 50 : 60;
 
-  const hasAccordeonContent = !!(
-    extra.collection || extra.reference || extra.taille ||
-    order.notes?.trim() || (prt && Object.values(prt).some(v => v))
-  );
+  const hasAccordeonContent = articles.some(a =>
+    a.collection || a.reference || a.taille || a.note ||
+    (a.prt && Object.values(a.prt).some(v => v))
+  ) || !!order.notes?.trim();
 
   const handleSaved = (patch: OrderPatch) => {
     setOrder((prev) => {
@@ -647,32 +721,75 @@ export function TshirtOrderCard({ order: initialOrder, isNew, onDelete, compact 
           </div>
         </div>
 
-        {/* ══ SECTION 2 : Visuels DTF côte à côte ══════════════════════════════ */}
+        {/* ══ SECTION 2 : Visuels DTF — un bloc par article ════════════════════ */}
         {hasVisuals && (
-          <div className={cn("flex gap-2", compact ? "px-2.5 pb-2" : "px-3 pb-2.5")}>
-            {visualAvant   && <VisualTile src={visualAvant}   label="Avant"   />}
-            {visualArriere && <VisualTile src={visualArriere} label="Arrière" />}
+          <div className={cn("flex flex-col gap-2.5", compact ? "px-2.5 pb-2" : "px-3 pb-2.5")}>
+            {articles.map((article, i) => {
+              const av  = article.fiche?.visuelAvant  ?? null;
+              const arr = article.fiche?.visuelArriere ?? null;
+              if (!av && !arr) return null;
+              return (
+                <div key={i}>
+                  {articles.length > 1 && (
+                    <p style={{
+                      fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
+                      textTransform: "uppercase", color: "#aeaeb2", marginBottom: 4,
+                    }}>
+                      {article.reference || `Article ${i + 1}`}
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    {av  && <VisualTile src={av}  label="Avant"   />}
+                    {arr && <VisualTile src={arr} label="Arrière" />}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
-        {/* ══ SECTION 3 : Infos immédiates — typeProduit · couleur · tailleDTFAr ══ */}
-        {(extra.fiche?.typeProduit || extra.fiche?.couleur || extra.fiche?.tailleDTFAr) && (
-          <div className={cn("flex flex-col", compact ? "px-2.5 pb-1.5 gap-0.5" : "px-3 pb-2 gap-1")}>
-            {extra.fiche?.typeProduit && (
-              <p className="truncate" style={{ fontSize: compact ? 11 : 12, color: "#3a3a3c", fontWeight: 500 }}>
-                {extra.fiche?.typeProduit}
-              </p>
-            )}
-            {extra.fiche?.couleur && (
-              <p className="truncate" style={{ fontSize: compact ? 11 : 12, color: "#636366" }}>
-                {extra.fiche?.couleur}
-              </p>
-            )}
-            {extra.fiche?.tailleDTFAr && (
-              <p className="truncate font-mono" style={{ fontSize: compact ? 11 : 12, color: "#636366", fontWeight: 600 }}>
-                {extra.fiche?.tailleDTFAr}
-              </p>
-            )}
+        {/* ══ SECTION 3 : Infos produit — typeProduit · couleur · tailleDTF ══════ */}
+        {articles.some(a => a.fiche?.typeProduit || a.fiche?.couleur || a.fiche?.tailleDTFAr || a.taille) && (
+          <div className={cn("flex flex-col", compact ? "px-2.5 pb-1.5 gap-1" : "px-3 pb-2 gap-1.5")}>
+            {articles.map((article, i) => {
+              const hasInfo = article.fiche?.typeProduit || article.fiche?.couleur || article.fiche?.tailleDTFAr || article.taille;
+              if (!hasInfo) return null;
+              return (
+                <div key={i} className="flex flex-col gap-0.5">
+                  {articles.length > 1 && !(article.fiche?.visuelAvant || article.fiche?.visuelArriere) && (
+                    <p style={{
+                      fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
+                      textTransform: "uppercase", color: "#aeaeb2",
+                    }}>
+                      {article.reference || `Article ${i + 1}`}
+                    </p>
+                  )}
+                  {article.fiche?.typeProduit && (
+                    <p className="truncate" style={{ fontSize: compact ? 11 : 12, color: "#3a3a3c", fontWeight: 500 }}>
+                      {article.fiche.typeProduit}
+                    </p>
+                  )}
+                  {article.fiche?.couleur && (
+                    <p className="truncate" style={{ fontSize: compact ? 11 : 12, color: "#636366" }}>
+                      {article.fiche.couleur}
+                    </p>
+                  )}
+                  {article.fiche?.tailleDTFAr && (
+                    <p className="truncate font-mono" style={{ fontSize: compact ? 11 : 12, color: "#636366", fontWeight: 600 }}>
+                      {article.fiche.tailleDTFAr}
+                    </p>
+                  )}
+                  {article.taille && (
+                    <p className="truncate" style={{ fontSize: compact ? 11 : 12, color: "#636366" }}>
+                      {article.taille}
+                    </p>
+                  )}
+                  {articles.length > 1 && i < articles.length - 1 && (
+                    <div style={{ height: 1, background: "#F2F2F7", margin: "4px 0" }} />
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -714,41 +831,64 @@ export function TshirtOrderCard({ order: initialOrder, isNew, onDelete, compact 
             "flex flex-col border-t border-[#E5E5E5]",
             compact ? "px-2.5 py-2 gap-1" : "px-3 py-2.5 gap-1.5",
           )}>
-            {extra.collection && (
-              <p className="truncate" style={{ fontSize: compact ? 11 : 12, color: "#636366" }}>
-                {extra.collection}
-              </p>
-            )}
-            {extra.reference && (
-              <p className="truncate font-mono" style={{ fontSize: compact ? 10 : 11, color: "#aeaeb2" }}>
-                {extra.reference}
-              </p>
-            )}
-            {extra.taille && (
-              <p className="truncate" style={{ fontSize: compact ? 11 : 12, color: "#3a3a3c", fontWeight: 600 }}>
-                {extra.taille}
-              </p>
-            )}
-            {order.notes?.trim() && (
-              <p className="truncate italic" style={{ fontSize: compact ? 10 : 11, color: "#636366" }} title={order.notes}>
+            {articles.map((article, i) => (
+              <div key={i} className="flex flex-col gap-1">
+                {/* Label article si multi-articles */}
+                {articles.length > 1 && (
+                  <p style={{
+                    fontSize: compact ? 9 : 10, fontWeight: 700, letterSpacing: "0.1em",
+                    textTransform: "uppercase", color: "#8e8e93",
+                  }}>
+                    Article {i + 1}{article.reference ? ` · ${article.reference}` : ""}
+                  </p>
+                )}
+                {article.collection && (
+                  <p className="truncate" style={{ fontSize: compact ? 11 : 12, color: "#636366" }}>
+                    {article.collection}
+                  </p>
+                )}
+                {article.reference && articles.length === 1 && (
+                  <p className="truncate font-mono" style={{ fontSize: compact ? 10 : 11, color: "#aeaeb2" }}>
+                    {article.reference}
+                  </p>
+                )}
+                {article.taille && (
+                  <p className="truncate" style={{ fontSize: compact ? 11 : 12, color: "#3a3a3c", fontWeight: 600 }}>
+                    {article.taille}
+                  </p>
+                )}
+                {article.note && (
+                  <p className="truncate italic" style={{ fontSize: compact ? 10 : 11, color: "#636366" }} title={article.note}>
+                    {article.note}
+                  </p>
+                )}
+                {/* Bloc PRT de cet article */}
+                {article.prt && Object.values(article.prt).some(v => v) && (
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    {[article.prt.refPrt, article.prt.taillePrt, article.prt.quantite && `×${article.prt.quantite}`]
+                      .filter(Boolean)
+                      .map((v, j) => (
+                        <span
+                          key={j}
+                          className="rounded-md bg-gray-100 px-1.5 py-0.5 font-mono"
+                          style={{ fontSize: compact ? 9 : 10, color: "#3a3a3c", fontWeight: 600 }}
+                        >
+                          {v}
+                        </span>
+                      ))}
+                  </div>
+                )}
+                {/* Séparateur entre articles */}
+                {articles.length > 1 && i < articles.length - 1 && (
+                  <div style={{ height: 1, background: "#F2F2F7", margin: "4px 0" }} />
+                )}
+              </div>
+            ))}
+            {/* Note commande globale (si pas de note par article) */}
+            {order.notes?.trim() && !articles.some(a => a.note) && (
+              <p className="truncate italic" style={{ fontSize: compact ? 10 : 11, color: "#636366" }} title={order.notes ?? ""}>
                 {order.notes}
               </p>
-            )}
-            {/* Bloc PRT */}
-            {prt && Object.values(prt).some(v => v) && (
-              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                {[prt.refPrt, prt.taillePrt, prt.quantite && `×${prt.quantite}`]
-                  .filter(Boolean)
-                  .map((v, i) => (
-                    <span
-                      key={i}
-                      className="rounded-md bg-gray-100 px-1.5 py-0.5 font-mono"
-                      style={{ fontSize: compact ? 9 : 10, color: "#3a3a3c", fontWeight: 600 }}
-                    >
-                      {v}
-                    </span>
-                  ))}
-              </div>
             )}
           </div>
         </div>

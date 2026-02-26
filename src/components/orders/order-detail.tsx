@@ -47,7 +47,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import type { Order, OldaExtraData, OrderStatus, PaymentStatus } from "@/types/order";
+import type { Order, OldaExtraData, OldaArticle, OrderStatus, PaymentStatus } from "@/types/order";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -58,6 +58,24 @@ function readExtra(order: Order): OldaExtraData {
   const sa = order.shippingAddress as Record<string, unknown>;
   if (sa._source === "olda_studio") return sa as unknown as OldaExtraData;
   return {};
+}
+
+/** Normalise en tableau d'articles (multi-articles ou rétrocompat mono-article) */
+function normalizeArticles(extra: OldaExtraData): OldaArticle[] {
+  if (extra.articles && extra.articles.length > 0) return extra.articles;
+  const hasSingleData = extra.fiche || extra.reference || extra.taille || extra.prt;
+  if (!hasSingleData) return [];
+  return [{
+    reference:  extra.reference,
+    taille:     extra.taille,
+    collection: extra.collection,
+    note:       extra.note,
+    fiche:      extra.fiche,
+    prt:        extra.prt,
+    prix:       extra.prix
+      ? { tshirt: extra.prix.tshirt, personnalisation: extra.prix.personnalisation }
+      : undefined,
+  }];
 }
 
 function fmtPrice(n: number, currency = "EUR") {
@@ -256,17 +274,20 @@ function EditModal({
   onClose: () => void;
   onSaved: (updated: Order) => void;
 }) {
+  // Pour les commandes multi-articles, on utilise le premier article comme référence d'édition
+  const firstArticle = extra.articles?.[0];
+
   const [fields, setFields] = useState<EditFields>({
     customerName:  order.customerName,
     customerPhone: order.customerPhone ?? "",
     limit:         extra.limit ?? "",
-    collection:    extra.collection ?? "",
-    reference:     extra.reference ?? "",
-    couleur:       extra.fiche?.couleur ?? "",
-    taille:        extra.taille ?? "",
-    tailleDTFAr:   extra.fiche?.tailleDTFAr ?? "",
-    visuelAvant:   extra.fiche?.visuelAvant ?? "",
-    visuelArriere: extra.fiche?.visuelArriere ?? "",
+    collection:    firstArticle?.collection ?? extra.collection ?? "",
+    reference:     firstArticle?.reference  ?? extra.reference  ?? "",
+    couleur:       firstArticle?.fiche?.couleur      ?? extra.fiche?.couleur      ?? "",
+    taille:        firstArticle?.taille              ?? extra.taille              ?? "",
+    tailleDTFAr:   firstArticle?.fiche?.tailleDTFAr  ?? extra.fiche?.tailleDTFAr  ?? "",
+    visuelAvant:   firstArticle?.fiche?.visuelAvant  ?? extra.fiche?.visuelAvant  ?? "",
+    visuelArriere: firstArticle?.fiche?.visuelArriere ?? extra.fiche?.visuelArriere ?? "",
     notes:         order.notes ?? "",
     status:        order.status,
     paymentStatus: order.paymentStatus,
@@ -605,7 +626,8 @@ export function OrderDetail({ order: initialOrder }: OrderDetailProps) {
   const [deleting, setDeleting] = useState(false);
   const [sending, setSending] = useState(false);
 
-  const extra = readExtra(order);
+  const extra    = readExtra(order);
+  const articles = normalizeArticles(extra);
   const createdAt = new Date(order.createdAt);
 
   const orderDot   = STATUS_DOT[order.status]     ?? { label: order.status,        color: "bg-zinc-500" };
@@ -703,26 +725,36 @@ export function OrderDetail({ order: initialOrder }: OrderDetailProps) {
         </SectionCard>
 
         {/* ══ 2. VISUELS TECHNIQUES ══════════════════════════════════════════ */}
-        {(extra.fiche?.visuelAvant || extra.fiche?.visuelArriere ||
+        {(articles.some(a => a.fiche?.visuelAvant || a.fiche?.visuelArriere) ||
           order.items.some((i) => i.imageUrl)) && (
           <SectionCard>
             <SectionLabel>Visuels techniques</SectionLabel>
-            <div className="px-4 pb-4 grid grid-cols-2 gap-3">
-              <VisuelCard
-                label="Face Avant"
-                src={
-                  order.items.find((i) => /avant|front/i.test(i.name))?.imageUrl
-                  ?? extra.fiche?.visuelAvant
-                }
-              />
-              <VisuelCard
-                label="Dos"
-                src={
-                  order.items.find((i) => /arri[eè]re|dos|back/i.test(i.name))?.imageUrl
-                  ?? extra.fiche?.visuelArriere
-                }
-              />
-            </div>
+            {articles.map((article, i) => {
+              // Cherche les items correspondant à cet article (format multi : "REF – Avant")
+              const refPattern = article.reference ? new RegExp(article.reference, "i") : null;
+              const avItem  = order.items.find(it =>
+                /avant|front/i.test(it.name) && (!refPattern || refPattern.test(it.name))
+              );
+              const arrItem = order.items.find(it =>
+                /arri[eè]re|dos|back/i.test(it.name) && (!refPattern || refPattern.test(it.name))
+              );
+              const srcAv  = avItem?.imageUrl  ?? article.fiche?.visuelAvant  ?? null;
+              const srcArr = arrItem?.imageUrl ?? article.fiche?.visuelArriere ?? null;
+              if (!srcAv && !srcArr) return null;
+              return (
+                <div key={i}>
+                  {articles.length > 1 && (
+                    <p className="px-5 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.1em] text-zinc-500">
+                      {article.reference || `Article ${i + 1}`}
+                    </p>
+                  )}
+                  <div className="px-4 pb-4 grid grid-cols-2 gap-3">
+                    <VisuelCard label="Face Avant" src={srcAv} />
+                    <VisuelCard label="Dos"        src={srcArr} />
+                  </div>
+                </div>
+              );
+            })}
           </SectionCard>
         )}
 
@@ -734,32 +766,64 @@ export function OrderDetail({ order: initialOrder }: OrderDetailProps) {
           <DataRow label="Limit"     value={extra.limit} last />
         </SectionCard>
 
-        {/* ══ 4. PRODUIT ═════════════════════════════════════════════════════ */}
-        <SectionCard>
-          <SectionLabel>Produit</SectionLabel>
-          <DataRow label="Collection"    value={extra.collection} />
-          <DataRow label="Référence"     value={extra.reference} mono />
-          <DataRow
-            label="Coloris"
-            value={
-              extra.fiche?.couleur ? (
-                <span className="flex items-center gap-2 justify-end">
-                  {extra.fiche?.couleur}
-                  <ColorDot color={extra.fiche?.couleur} />
-                </span>
-              ) : undefined
-            }
-          />
-          <DataRow label="Taille"        value={extra.taille} />
-          <DataRow label="Taille DTF AR" value={extra.fiche?.tailleDTFAr} last />
-        </SectionCard>
+        {/* ══ 4. PRODUIT — un bloc par article ═══════════════════════════════ */}
+        {articles.map((article, i) => (
+          <SectionCard key={i}>
+            <SectionLabel>
+              {articles.length > 1
+                ? `Article ${i + 1}${article.reference ? ` · ${article.reference}` : ""}`
+                : "Produit"}
+            </SectionLabel>
+            <DataRow label="Collection" value={article.collection ?? extra.collection} />
+            <DataRow label="Référence"  value={article.reference}  mono />
+            <DataRow
+              label="Coloris"
+              value={
+                article.fiche?.couleur ? (
+                  <span className="flex items-center gap-2 justify-end">
+                    {article.fiche.couleur}
+                    <ColorDot color={article.fiche.couleur} />
+                  </span>
+                ) : undefined
+              }
+            />
+            <DataRow label="Taille"        value={article.taille} />
+            <DataRow label="Taille DTF AR" value={article.fiche?.tailleDTFAr} last />
+          </SectionCard>
+        ))}
 
-        {/* ══ 5. VISUELS DTF ══════════════════════════════════════════════════ */}
-        {(extra.fiche?.visuelAvant || extra.fiche?.visuelArriere) && (
+        {/* Fallback si aucun article (commande sans données produit) */}
+        {articles.length === 0 && (extra.collection || extra.reference || extra.taille) && (
+          <SectionCard>
+            <SectionLabel>Produit</SectionLabel>
+            <DataRow label="Collection"    value={extra.collection} />
+            <DataRow label="Référence"     value={extra.reference} mono />
+            <DataRow label="Taille"        value={extra.taille} last />
+          </SectionCard>
+        )}
+
+        {/* ══ 5. VISUELS DTF — un bloc par article ════════════════════════════ */}
+        {articles.some(a => a.fiche?.visuelAvant || a.fiche?.visuelArriere) && (
           <SectionCard>
             <SectionLabel>Visuels DTF</SectionLabel>
-            <DataRow label="Avant"   value={extra.fiche?.visuelAvant}   mono />
-            <DataRow label="Arrière" value={extra.fiche?.visuelArriere} mono last />
+            {articles.map((article, i) => {
+              if (!article.fiche?.visuelAvant && !article.fiche?.visuelArriere) return null;
+              return (
+                <div key={i}>
+                  {articles.length > 1 && (
+                    <p className="px-5 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.1em] text-zinc-500">
+                      {article.reference || `Article ${i + 1}`}
+                    </p>
+                  )}
+                  {article.fiche?.visuelAvant && (
+                    <DataRow label="Avant"   value={article.fiche.visuelAvant}   mono />
+                  )}
+                  {article.fiche?.visuelArriere && (
+                    <DataRow label="Arrière" value={article.fiche.visuelArriere} mono last />
+                  )}
+                </div>
+              );
+            })}
           </SectionCard>
         )}
 

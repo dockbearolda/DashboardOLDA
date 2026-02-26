@@ -24,7 +24,7 @@ import { ChevronDown, Package, Users, CreditCard, MapPin } from "lucide-react";
 import { differenceInCalendarDays, format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import type { OldaExtraData } from "@/types/order";
+import type { OldaExtraData, OldaArticle } from "@/types/order";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // HOOKS
@@ -83,6 +83,33 @@ function fmtPrice(centimes: number | undefined): string {
 function isDtfCode(s: string | undefined | null): boolean {
   if (!s) return false;
   return !s.startsWith("http") && !s.startsWith("data:");
+}
+
+/**
+ * Normalise en tableau d'articles uniforme.
+ * — Nouveau format : data.articles[]
+ * — Ancien format  : data.fiche / data.prt / data.reference (mono-article)
+ */
+function normalizeArticles(data: OldaExtraData, fallbackImages: string[]): OldaArticle[] {
+  if (data.articles && data.articles.length > 0) return data.articles;
+
+  const hasSingleData = data.fiche || data.reference || data.taille || data.prt;
+  if (!hasSingleData && fallbackImages.length === 0) return [];
+
+  return [{
+    reference:  data.reference,
+    taille:     data.taille,
+    collection: data.collection,
+    note:       data.note,
+    fiche: data.fiche ?? (fallbackImages.length > 0 ? {
+      visuelAvant:   fallbackImages[0],
+      visuelArriere: fallbackImages[1],
+    } : undefined),
+    prt:  data.prt,
+    prix: data.prix
+      ? { tshirt: data.prix.tshirt, personnalisation: data.prix.personnalisation }
+      : undefined,
+  }];
 }
 
 type DeadlineState = "overdue" | "today" | "tomorrow" | "soon" | "normal";
@@ -295,27 +322,14 @@ export function OrderCard({
   const prenom     = data.prenom    ?? "";
   const nom        = data.nom       ?? "";
   const telephone  = data.telephone ?? "";
-  const reference  = data.reference;
   const deadline   = getDeadlineInfo(data.limit);
 
-  // Visuels : priorité images locales, puis fiche
-  const visuelAvant   = localImages[0] ?? data.fiche?.visuelAvant;
-  const visuelArriere = localImages[1] ?? data.fiche?.visuelArriere;
+  // Articles normalisés (multi-articles ou rétrocompat mono-article)
+  const articles = normalizeArticles(data, localImages);
 
-  // Infos produit
-  const typeProduit = data.fiche?.typeProduit;
-  const couleur     = data.fiche?.couleur;
-  const tailleDTF   = data.fiche?.tailleDTFAr;
-
-  // Détails secondaires
-  const collection = data.collection;
-  const taille     = data.taille;
-  const note       = data.note;
-
-  // PRT
-  const refPrt    = data.prt?.refPrt;
-  const taillePrt = data.prt?.taillePrt;
-  const quantite  = data.prt?.quantite;
+  // Premier article pour la vue résumée (référence affichée dans le header)
+  const firstArticle = articles[0];
+  const reference = firstArticle?.reference ?? data.reference;
 
   // Paiement & prix
   const isPaid =
@@ -333,7 +347,12 @@ export function OrderCard({
       : commande || "olda";
 
   // Visibilité accordéon
-  const hasBlock1 = !!(typeProduit || couleur || tailleDTF || collection || taille || note || refPrt || positionLogo);
+  const hasBlock1 = !!(
+    articles.some(a =>
+      a.fiche?.typeProduit || a.fiche?.couleur || a.fiche?.tailleDTFAr ||
+      a.collection || a.taille || a.note || a.prt?.refPrt
+    ) || positionLogo
+  );
   const hasBlock2 = !!(customerEmail || customerAddress || telephone || data.limit);
   const hasAccordion = hasBlock1 || hasBlock2 || hasBilling;
 
@@ -444,27 +463,43 @@ export function OrderCard({
                 </div>
               )}
 
-              {/* 3. Visuels */}
-              {visuelAvant && (
-                <div className="flex items-start gap-2.5">
-                  <VisualThumbnail src={visuelAvant} label="Avant" isDtf={isDtfCode(visuelAvant)} />
-                  {visuelArriere
-                    ? <VisualThumbnail src={visuelArriere} label="Arrière" isDtf={isDtfCode(visuelArriere)} />
-                    : <EmptyBackIndicator />
-                  }
-                </div>
-              )}
-              {!visuelAvant && visuelArriere && (
-                <div className="flex items-start gap-2.5">
-                  <VisualThumbnail src={visuelArriere} label="Arrière" isDtf={isDtfCode(visuelArriere)} />
+              {/* 3. Visuels — un bloc par article */}
+              {articles.some(a => a.fiche?.visuelAvant || a.fiche?.visuelArriere) && (
+                <div className="flex flex-col gap-2">
+                  {articles.map((article, i) => {
+                    const av  = article.fiche?.visuelAvant  ?? null;
+                    const arr = article.fiche?.visuelArriere ?? null;
+                    if (!av && !arr) return null;
+                    return (
+                      <div key={i}>
+                        {articles.length > 1 && (
+                          <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">
+                            {article.reference || `Article ${i + 1}`}
+                          </p>
+                        )}
+                        <div className="flex items-start gap-2.5">
+                          {av
+                            ? <VisualThumbnail src={av} label="Avant" isDtf={isDtfCode(av)} />
+                            : <EmptyBackIndicator />
+                          }
+                          {arr
+                            ? <VisualThumbnail src={arr} label="Arrière" isDtf={isDtfCode(arr)} />
+                            : av ? <EmptyBackIndicator /> : null
+                          }
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
-              {/* 4. Note client */}
-              {note && (
+              {/* 4. Note client (première note disponible) */}
+              {(firstArticle?.note ?? data.note) && (
                 <div className="flex items-start gap-1.5">
                   <span className="text-xs mt-px select-none">📝</span>
-                  <p className="text-xs italic text-gray-500 leading-snug break-words min-w-0">{note}</p>
+                  <p className="text-xs italic text-gray-500 leading-snug break-words min-w-0">
+                    {firstArticle?.note ?? data.note}
+                  </p>
                 </div>
               )}
 
@@ -531,61 +566,77 @@ export function OrderCard({
                   label="Infos Atelier"
                 />
 
-                {/* Grille label/valeur — 2 colonnes */}
-                {(typeProduit || couleur || tailleDTF || collection || taille || positionLogo) && (
+                {/* Position logo (niveau commande) */}
+                {positionLogo && (
                   <div className="grid grid-cols-1 gap-4 mt-4 sm:grid-cols-2">
-                    {typeProduit && (
-                      <InfoCell label="Famille" value={typeProduit} />
-                    )}
-                    {couleur && (
-                      <InfoCell label="Couleur" value={couleur} />
-                    )}
-                    {tailleDTF && (
-                      <InfoCell label="Taille DTF" value={tailleDTF} bold />
-                    )}
-                    {positionLogo && (
-                      <InfoCell label="Position Logo" value={positionLogo} />
-                    )}
-                    {collection && (
-                      <InfoCell label="Collection" value={collection} />
-                    )}
-                    {taille && (
-                      <InfoCell label="Taille" value={taille} />
-                    )}
+                    <InfoCell label="Position Logo" value={positionLogo} />
                   </div>
                 )}
 
-                {/* Note client — encart dédié */}
-                {note && (
-                  <div className="mt-4 rounded-xl border border-gray-200 bg-white px-4 py-3">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                      Note / Message client
-                    </p>
-                    <p className="text-sm font-medium text-gray-800 italic leading-relaxed break-words">
-                      {note}
-                    </p>
-                  </div>
-                )}
+                {/* Un bloc par article */}
+                {articles.map((article, i) => (
+                  <div key={i} className={i > 0 ? "mt-5 pt-5 border-t border-gray-200" : "mt-4"}>
+                    {/* Label article si multi-articles */}
+                    {articles.length > 1 && (
+                      <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
+                        Article {i + 1}{article.reference ? ` · ${article.reference}` : ""}
+                      </p>
+                    )}
 
-                {/* PRT / Impression — encart dédié */}
-                {(refPrt || taillePrt || quantite !== undefined) && (
-                  <div className="mt-4 rounded-xl border border-gray-200 bg-white px-4 py-3">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                      Impression (PRT)
-                    </p>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      {refPrt && (
-                        <InfoCell label="Référence" value={refPrt} />
-                      )}
-                      {taillePrt && (
-                        <InfoCell label="Taille impression" value={taillePrt} />
-                      )}
-                      {quantite !== undefined && (
-                        <InfoCell label="Quantité" value={String(quantite)} bold />
-                      )}
-                    </div>
+                    {/* Grille label/valeur — 2 colonnes */}
+                    {(article.fiche?.typeProduit || article.fiche?.couleur || article.fiche?.tailleDTFAr || article.collection || article.taille) && (
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {article.fiche?.typeProduit && (
+                          <InfoCell label="Famille" value={article.fiche.typeProduit} />
+                        )}
+                        {article.fiche?.couleur && (
+                          <InfoCell label="Couleur" value={article.fiche.couleur} />
+                        )}
+                        {article.fiche?.tailleDTFAr && (
+                          <InfoCell label="Taille DTF" value={article.fiche.tailleDTFAr} bold />
+                        )}
+                        {article.collection && (
+                          <InfoCell label="Collection" value={article.collection} />
+                        )}
+                        {article.taille && (
+                          <InfoCell label="Taille" value={article.taille} />
+                        )}
+                      </div>
+                    )}
+
+                    {/* Note de cet article */}
+                    {article.note && (
+                      <div className="mt-4 rounded-xl border border-gray-200 bg-white px-4 py-3">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                          Note / Message client
+                        </p>
+                        <p className="text-sm font-medium text-gray-800 italic leading-relaxed break-words">
+                          {article.note}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* PRT de cet article */}
+                    {(article.prt?.refPrt || article.prt?.taillePrt || article.prt?.quantite !== undefined) && (
+                      <div className="mt-4 rounded-xl border border-gray-200 bg-white px-4 py-3">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                          Impression (PRT)
+                        </p>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          {article.prt?.refPrt && (
+                            <InfoCell label="Référence" value={article.prt.refPrt} />
+                          )}
+                          {article.prt?.taillePrt && (
+                            <InfoCell label="Taille impression" value={article.prt.taillePrt} />
+                          )}
+                          {article.prt?.quantite !== undefined && (
+                            <InfoCell label="Quantité" value={String(article.prt.quantite)} bold />
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
+                ))}
               </section>
             )}
 

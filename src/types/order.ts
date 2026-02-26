@@ -66,6 +66,36 @@ export interface OrderStats {
 
 // ── Nouveau format JSON envoyé par Olda Studio ────────────────────────────────
 
+/** Un article individuel dans une commande multi-articles (panier) */
+export interface OldaArticle {
+  reference?: string;          // Référence produit (ex: "PACK-NOIR-L")
+  taille?: string;             // Taille du vêtement
+  note?: string;               // Note spécifique à cet article
+  collection?: string;
+
+  // ── Fiche visuel + spécifications ──
+  fiche?: {
+    visuelAvant?: string;      // Image ou code DTF avant
+    visuelArriere?: string;    // Image ou code DTF arrière
+    tailleDTFAr?: string;      // Taille DTF (ex: "A4", "A3 +5cm")
+    typeProduit?: string;      // Type de produit (T-shirt, etc.)
+    couleur?: string;          // Couleur
+  };
+
+  // ── Impression (PRT) ──
+  prt?: {
+    refPrt?: string;
+    taillePrt?: string;
+    quantite?: number;
+  };
+
+  // ── Prix de cet article (en centimes) ──
+  prix?: {
+    tshirt?: number;           // Prix T-shirt nu
+    personnalisation?: number; // Prix personnalisation DTF/Pressage
+  };
+}
+
 /** Champs extra stockés dans shippingAddress (JSONB) pour les commandes Olda Studio */
 export interface OldaExtraData {
   // ── Identité commande ──
@@ -111,6 +141,10 @@ export interface OldaExtraData {
     personnalisation?: number; // Prix personnalisation DTF/Pressage en centimes
   };
 
+  // ── Multi-articles (panier) ──
+  /** Présent quand le client a mis plusieurs articles dans son panier */
+  articles?: OldaArticle[];
+
   // ── Marqueur d'origine ──
   _source?: "olda_studio";     // Ne pas modifier
 }
@@ -146,6 +180,9 @@ export interface OldaCommandePayload {
   paiement?: {
     statut?: "OUI" | "NON";  // OUI = PAID, NON = PENDING
   };
+
+  /** Articles du panier — présent quand le client a commandé plusieurs t-shirts */
+  articles?: OldaArticle[];
 }
 
 export interface WebhookOrderPayload {
