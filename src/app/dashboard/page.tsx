@@ -36,34 +36,30 @@ async function getDashboardData() {
   const todayStart = startOfDay(now);
   const yesterdayStart = startOfDay(subDays(now, 1));
 
-  // All orders with items — raw SQL, consistent with API routes
-  const rawOrders = await prisma.$queryRaw<Record<string, unknown>[]>`
-    SELECT o.*,
-      COALESCE(json_agg(
-        json_build_object(
-          'id', i.id, 'orderId', i."orderId", 'name', i.name,
-          'sku', i.sku, 'quantity', i.quantity, 'price', i.price, 'imageUrl', i."imageUrl"
-        ) ORDER BY i.id
-      ) FILTER (WHERE i.id IS NOT NULL), '[]') AS items
-    FROM orders o
-    LEFT JOIN order_items i ON i."orderId" = o.id
-    GROUP BY o.id
-    ORDER BY o."createdAt" DESC
-  `;
+  // All orders with items — compatible with both SQLite and PostgreSQL
+  const ordersWithItems = await prisma.order.findMany({
+    include: { items: true },
+    orderBy: { createdAt: 'desc' },
+  });
 
-  const todayRows = await prisma.$queryRaw<{ total: number }[]>`
-    SELECT total FROM orders WHERE "createdAt" >= ${todayStart}
-  `;
-
-  const yesterdayRows = await prisma.$queryRaw<{ total: number }[]>`
-    SELECT total FROM orders WHERE "createdAt" >= ${yesterdayStart} AND "createdAt" < ${todayStart}
-  `;
-
-  const orders = (rawOrders as RawOrder[]).map((o) => ({
+  const orders = ordersWithItems.map((o: typeof ordersWithItems[0]) => ({
     ...o,
-    createdAt: o.createdAt instanceof Date ? (o.createdAt as Date).toISOString() : String(o.createdAt),
-    updatedAt: o.updatedAt instanceof Date ? (o.updatedAt as Date).toISOString() : String(o.updatedAt),
+    createdAt: o.createdAt instanceof Date ? o.createdAt.toISOString() : String(o.createdAt),
+    updatedAt: o.updatedAt instanceof Date ? o.updatedAt.toISOString() : String(o.updatedAt),
   }));
+
+  const todayOrders = orders.filter((o: typeof orders[0]) => {
+    const createdDate = new Date(o.createdAt);
+    return createdDate >= todayStart;
+  });
+
+  const yesterdayOrders = orders.filter((o: typeof orders[0]) => {
+    const createdDate = new Date(o.createdAt);
+    return createdDate >= yesterdayStart && createdDate < todayStart;
+  });
+
+  const todayRows = todayOrders.map((o: typeof orders[0]) => ({ total: o.total }));
+  const yesterdayRows = yesterdayOrders.map((o: typeof orders[0]) => ({ total: o.total }));
 
   const totalRevenue = orders.reduce((s: number, o: typeof orders[0]) => s + (Number(o.total) || 0), 0);
   const todayRevenue = todayRows.reduce((s: number, o: typeof todayRows[0]) => s + (Number(o.total) || 0), 0);
@@ -76,15 +72,15 @@ async function getDashboardData() {
 
   // Analytics metrics
   const paidRevenue = orders
-    .filter((o) => o.paymentStatus === "PAID")
-    .reduce((s, o) => s + (Number(o.total) || 0), 0);
+    .filter((o: typeof orders[0]) => o.paymentStatus === "PAID")
+    .reduce((s: number, o: typeof orders[0]) => s + (Number(o.total) || 0), 0);
   const avgOrderValue = orders.length > 0 ? paidRevenue / orders.length : 0;
-  const uniqueCustomers = new Set(orders.map((o) => String(o.customerEmail))).size;
+  const uniqueCustomers = new Set(orders.map((o: typeof orders[0]) => String(o.customerEmail))).size;
 
   // Top 5 products by revenue
   const topProducts = orders
-    .flatMap((o) => (o.items as OrderItem[]) ?? [])
-    .reduce((acc: { name: string; count: number; revenue: number }[], item) => {
+    .flatMap((o: typeof orders[0]) => (o.items as OrderItem[]) ?? [])
+    .reduce((acc: { name: string; count: number; revenue: number }[], item: OrderItem) => {
       const existing = acc.find((p) => p.name === item.name);
       if (existing) {
         existing.count += item.quantity;
@@ -94,7 +90,7 @@ async function getDashboardData() {
       }
       return acc;
     }, [])
-    .sort((a, b) => b.revenue - a.revenue)
+    .sort((a: { name: string; count: number; revenue: number }, b: { name: string; count: number; revenue: number }) => b.revenue - a.revenue)
     .slice(0, 5);
 
   // 30-day revenue chart
@@ -130,9 +126,9 @@ async function getDashboardData() {
       totalRevenue,
       todayRevenue,
       todayOrders:      todayRows.length,
-      pendingOrders:    orders.filter((o) => o.status === "COMMANDE_A_TRAITER").length,
-      shippedOrders:    orders.filter((o) => o.status === "CLIENT_PREVENU").length,
-      paidOrders:       orders.filter((o) => o.paymentStatus === "PAID").length,
+      pendingOrders:    orders.filter((o: typeof orders[0]) => o.status === "COMMANDE_A_TRAITER").length,
+      shippedOrders:    orders.filter((o: typeof orders[0]) => o.status === "CLIENT_PREVENU").length,
+      paidOrders:       orders.filter((o: typeof orders[0]) => o.paymentStatus === "PAID").length,
       revenueTrend,
       avgOrderValue,
       uniqueCustomers,
