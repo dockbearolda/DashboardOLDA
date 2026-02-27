@@ -161,7 +161,7 @@ const TABS: { key: TabKey; label: string; secteur: string | null }[] = [
 // Grip | Type | Priorité | Client | Secteur | Qté | Note | Échéance | État | Interne | ×
 
 const GRID_COLS =
-  "32px 76px 94px 175px 158px 64px minmax(110px,1fr) 150px 172px 108px 40px";
+  "32px 76px 94px 175px 158px 64px minmax(110px,1fr) 165px 172px 108px 40px";
 const GRID_STYLE: CSSProperties = { gridTemplateColumns: GRID_COLS };
 
 const COL_HEADERS = [
@@ -217,12 +217,13 @@ function isUrgent(deadline: string | null): boolean {
   return d !== null && d <= 1;
 }
 
-/** Affiche "DD/MM" sans passer par UTC — corrige le bug "jour -1" en UTC+x */
+/** Affiche "DD/MM/YY" sans passer par UTC — corrige le bug "jour -1" en UTC+x */
 function formatDDMM(date: string | null): string {
   if (!date) return "";
   const parsed = parseISODate(date);
   if (!parsed) return "";
-  return `${String(parsed.day).padStart(2, "0")}/${String(parsed.month).padStart(2, "0")}`;
+  const yy = String(parsed.year).slice(-2);
+  return `${String(parsed.day).padStart(2, "0")}/${String(parsed.month).padStart(2, "0")}/${yy}`;
 }
 
 function parseDDMM(text: string): string | null {
@@ -452,7 +453,7 @@ function HybridDateInput({
     const raw = e.target.value;
     setText(raw);
     // Auto-parse dès que le format DD/MM est complet
-    if (raw.length >= 5) {
+    if (raw.length >= 5 && (raw.length < 7 || raw.length >= 8)) {
       const parsed = parseDDMM(raw);
       if (parsed) onChange(parsed);
     }
@@ -481,10 +482,10 @@ function HybridDateInput({
         onChange={handleTextChange}
         onFocus={() => setFocus(true)}
         onBlur={handleTextBlur}
-        placeholder="JJ/MM"
-        maxLength={10}
+        placeholder="JJ/MM/AA"
+        maxLength={8}
         className={cn(
-          "w-[66px] shrink-0 h-8 px-2 text-[13px] rounded-lg border bg-transparent",
+          "w-[82px] shrink-0 h-8 px-2 text-[13px] rounded-lg border bg-transparent",
           "focus:outline-none focus:ring-2 focus:border-blue-300 focus:ring-blue-100/70 focus:bg-white",
           "transition-all duration-100 tabular-nums",
           urgent
