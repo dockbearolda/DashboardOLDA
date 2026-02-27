@@ -114,14 +114,15 @@ const COLORS = [
   { key: "blue",   dot: "bg-blue-400",   row: "bg-blue-50",   hover: "hover:bg-blue-100/60"   },
 ] as const;
 
-// ── Grille (12 colonnes) ───────────────────────────────────────────────────────
-// Priorité | Client | Désignation | Qté | Note | Prix u. | Total | Échéance | État | Interne | Couleur | ×
+// ── Grille (13 colonnes) ───────────────────────────────────────────────────────
+// + | Priorité | Client | Désignation | Qté | Note | Prix u. | Total | Échéance | État | Interne | Couleur | ×
 // Inline style used (not Tailwind arbitrary class) to guarantee rendering after any column edit.
 
-const GRID_COLS = "110px 150px minmax(140px,1fr) 70px 150px 78px 90px 120px minmax(150px,1fr) 116px 82px 50px";
+const GRID_COLS = "50px 110px 150px minmax(140px,1fr) 70px 150px 78px 90px 120px minmax(150px,1fr) 116px 82px 50px";
 const GRID_STYLE: CSSProperties = { gridTemplateColumns: GRID_COLS };
 
 const COL_HEADERS = [
+  { label: "",            align: "center" },
   { label: "Priorité",    align: "left"   },
   { label: "Client",      align: "left"   },
   { label: "Désignation", align: "left"   },
@@ -358,25 +359,8 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
     >
 
       {/* ── Barre d'outils ──────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-        <div>
-          <h2 className="text-[13px] font-semibold text-slate-900 tracking-tight">
-            Planning d&apos;Entreprise
-          </h2>
-          <p className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
-            {sorted.length} ligne{sorted.length !== 1 ? "s" : ""}
-          </p>
-        </div>
-
-        <button
-          onClick={addRow}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-semibold shadow-sm
-            bg-blue-500 text-white hover:bg-blue-600 shadow-blue-200
-            transition-all duration-150 active:scale-[0.97] select-none"
-        >
-          <Plus className="h-3.5 w-3.5 shrink-0" />
-          Nouvelle ligne
-        </button>
+      <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+        <div />
       </div>
 
       {/* ── Tableau (scroll horizontal) ─────────────────────────────────────── */}
@@ -403,28 +387,6 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
             ))}
           </div>
 
-          {/* ── État vide ────────────────────────────────────────────────────── */}
-          <AnimatePresence>
-            {sorted.length === 0 && (
-              <motion.div
-                key="empty"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="py-16 text-center"
-              >
-                <p className="text-[13px] text-slate-400">
-                  Aucune ligne —{" "}
-                  <button
-                    onClick={addRow}
-                    className="font-semibold text-slate-600 underline underline-offset-2 hover:text-slate-900 transition-colors"
-                  >
-                    créer la première
-                  </button>
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
 
           {/* ── Lignes ───────────────────────────────────────────────────────── */}
           <Reorder.Group as="div" axis="y" values={sorted} onReorder={handleReorder}>
@@ -464,6 +426,20 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
                           />
                         )}
                       </AnimatePresence>
+
+                      {/* 0. Ajouter une ligne */}
+                      <div className="h-full flex items-center justify-center">
+                        <button
+                          onClick={addRow}
+                          className={cn(
+                            "p-1.5 rounded-md transition-all duration-150",
+                            "text-slate-400 hover:text-blue-500 hover:bg-blue-50"
+                          )}
+                          aria-label="Ajouter une ligne"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
 
                       {/* 1. Priorité */}
                       <div className={CELL_WRAP}>
@@ -725,19 +701,6 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
             </AnimatePresence>
           </Reorder.Group>
 
-          {/* ── Bouton ajout bas de tableau ──────────────────────────────────── */}
-          {sorted.length > 0 && (
-            <button
-              onClick={addRow}
-              className="w-full flex items-center gap-2 px-5 py-3
-                text-[12px] font-semibold text-blue-500
-                transition-colors duration-150 border-t border-slate-100
-                hover:text-blue-700 hover:bg-blue-50/50"
-            >
-              <Plus className="h-3.5 w-3.5 shrink-0" />
-              Ajouter une ligne
-            </button>
-          )}
 
         </div>
       </div>
