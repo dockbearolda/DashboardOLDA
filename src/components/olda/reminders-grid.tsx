@@ -183,11 +183,10 @@ function ReminderCard({
   return (
     <div
       className={cn(
-        "rounded-[18px] bg-white border shadow-sm p-3.5 md:p-4",
-        "flex flex-col min-h-[200px]",
-        "transition-all duration-200",
-        isActive   ? "border-blue-300/70 shadow-blue-100/60 bg-blue-50/30" : "border-gray-100",
-        isDragOver ? "border-blue-400 bg-blue-50/50 scale-[1.02] shadow-md" : ""
+        "rounded-2xl bg-white border p-3 flex flex-col",
+        "transition-colors duration-150",
+        isActive   ? "border-blue-300/70 bg-blue-50/30" : "border-gray-100",
+        isDragOver ? "border-blue-400 bg-blue-50/50" : ""
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -196,59 +195,68 @@ function ReminderCard({
         fontFamily: "'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
         WebkitFontSmoothing: "antialiased",
         MozOsxFontSmoothing: "grayscale",
+        transform: "translateZ(0)",
+        backfaceVisibility: "hidden",
+        WebkitBackfaceVisibility: "hidden",
+        boxShadow: isActive
+          ? "0 1px 8px 0 rgba(59,130,246,0.10), 0 0 0 1px rgba(147,197,253,0.5)"
+          : isDragOver
+            ? "0 2px 12px 0 rgba(59,130,246,0.14)"
+            : "0 1px 4px 0 rgba(0,0,0,0.05)",
       }}
     >
       {/* ── Header ── */}
-      <div className="flex items-center gap-2.5 mb-3">
-        {isActive && <span className="h-2.5 w-2.5 rounded-full bg-blue-500 shrink-0" />}
+      <div className="flex items-center gap-2 mb-2.5">
+        {isActive && <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />}
         <span className={cn(
-          "text-xs font-bold text-gray-900 uppercase tracking-wider",
+          "text-[11px] font-bold text-gray-900 uppercase tracking-wider",
           isActive && "text-blue-600"
         )}>
           {personName}
         </span>
-        <span className="text-xs font-semibold text-gray-500 ml-auto px-2.5 py-1 rounded-full bg-gray-100">
+        <span className="text-[11px] font-semibold text-gray-400 ml-auto px-2 py-0.5 rounded-full bg-gray-100/80">
           {todos.length}
         </span>
       </div>
 
       {/* ── Liste des todos ── */}
-      <div className="flex-1 flex flex-col gap-2">
+      <div className="flex-1 flex flex-col gap-1.5">
         {todos.length === 0 && !isAdding && (
-          <p className="text-[13px] italic text-gray-300 py-6 text-center">Aucune tâche</p>
+          <p className="text-xs italic text-gray-300 py-4 text-center">Aucune tâche</p>
         )}
 
-        <AnimatePresence mode="popLayout">
+        <AnimatePresence mode="sync">
           {todos.map((todo) => (
             <motion.div
               key={todo.id}
-              layout
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, x: 40, transition: { duration: 0.15 } }}
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0, transition: { duration: 0.18, ease: [0.25, 0.1, 0.25, 1] } }}
+              exit={{ opacity: 0, x: 24, transition: { duration: 0.14, ease: [0.25, 0.1, 0.25, 1] } }}
               draggable={editingId !== todo.id}
               onDragStart={(e) => {
                 if (editingId === todo.id) return;
                 handleDragStart(e as unknown as React.DragEvent, todo);
               }}
+              style={{ willChange: "transform, opacity" }}
               className={cn(
-                "flex items-center gap-2.5 w-full rounded-[14px] px-3 py-2.5 bg-white border border-gray-100",
-                "transition-colors",
-                editingId !== todo.id && "cursor-grab active:cursor-grabbing hover:border-gray-200 hover:shadow-sm group",
+                "flex items-center gap-2 w-full rounded-xl px-2.5 py-2 bg-white border border-gray-100",
+                "transition-colors duration-150",
+                editingId !== todo.id && "cursor-grab active:cursor-grabbing hover:border-gray-200 group",
               )}
             >
               {/* Dot toggle ✓ */}
               <motion.button
                 onClick={(e) => { e.stopPropagation(); toggle(todo.id); }}
-                whileTap={{ scale: 0.85 }}
+                whileTap={{ scale: 0.82, transition: { duration: 0.1 } }}
+                style={{ willChange: "transform" }}
                 className={cn(
-                  "shrink-0 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-all duration-200",
+                  "shrink-0 h-4.5 w-4.5 rounded-full border-2 flex items-center justify-center transition-colors duration-150",
                   todo.done
                     ? "bg-green-500 border-green-500"
-                    : "border-gray-300 hover:border-green-500 hover:bg-green-50"
+                    : "border-gray-300 hover:border-green-400 hover:bg-green-50"
                 )}
               >
-                {todo.done && <Check className="h-3 w-3 text-white" />}
+                {todo.done && <Check className="h-2.5 w-2.5 text-white" />}
               </motion.button>
 
               {/* Texte ou input inline */}
@@ -262,14 +270,14 @@ function ReminderCard({
                     if (e.key === "Escape") { setEditingId(null); setEditText(""); }
                   }}
                   onBlur={commitEdit}
-                  className="flex-1 text-sm font-medium text-gray-900 bg-transparent outline-none border-b border-blue-400"
+                  className="flex-1 text-[13px] font-medium text-gray-900 bg-transparent outline-none border-b border-blue-400"
                 />
               ) : (
                 <span
                   onClick={() => handleItemClick(todo)}
                   className={cn(
-                    "flex-1 text-sm font-medium select-none cursor-text hover:text-gray-700 transition-colors",
-                    todo.done ? "line-through text-gray-400" : "text-gray-900"
+                    "flex-1 text-[13px] font-medium select-none cursor-text transition-colors duration-150",
+                    todo.done ? "line-through text-gray-400" : "text-gray-900 hover:text-gray-700"
                   )}
                 >
                   {todo.text}
@@ -278,17 +286,15 @@ function ReminderCard({
 
               {/* Trash — visible au survol */}
               {editingId !== todo.id && (
-                <motion.button
-                  initial={{ opacity: 0 }}
-                  whileHover={{ opacity: 1 }}
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onUpdate(todos.filter(t => t.id !== todo.id));
                   }}
-                  className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                  className="shrink-0 p-1 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors duration-150 opacity-0 group-hover:opacity-100"
                 >
-                  <Trash2 className="h-4 w-4" />
-                </motion.button>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               )}
             </motion.div>
           ))}
@@ -296,10 +302,10 @@ function ReminderCard({
       </div>
 
       {/* Input ajout rapide */}
-      <div className="mt-auto pt-3 border-t border-gray-100">
+      <div className="mt-auto pt-2 border-t border-gray-100">
         {isAdding ? (
-          <div className="flex items-center gap-2.5">
-            <span className="shrink-0 h-5 w-5 rounded-full border-2 border-gray-200" />
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 h-4 w-4 rounded-full border-2 border-gray-200" />
             <input
               ref={addInputRef}
               value={draft}
@@ -310,16 +316,16 @@ function ReminderCard({
               }}
               onBlur={() => { commitDraft(); setIsAdding(false); }}
               placeholder="Nouvelle tâche..."
-              className="flex-1 text-sm text-gray-700 placeholder:text-gray-400 bg-transparent outline-none"
+              className="flex-1 text-[13px] text-gray-700 placeholder:text-gray-400 bg-transparent outline-none"
             />
           </div>
         ) : (
           <button
             onClick={openAdd}
-            className="flex items-center gap-2.5 w-full text-sm font-medium text-gray-500 hover:text-gray-700 px-3 py-2 rounded-[14px] hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-2 w-full text-[12px] font-medium text-gray-400 hover:text-gray-600 px-2 py-1.5 rounded-xl hover:bg-gray-50 transition-colors duration-150"
           >
-            <Plus className="h-4 w-4" />
-            Ajouter une tâche
+            <Plus className="h-3.5 w-3.5" />
+            Ajouter
           </button>
         )}
       </div>
@@ -411,7 +417,7 @@ export function RemindersGrid({
   }, []);
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
       {PEOPLE.map((p) => (
         <ReminderCard
           key={p.key}

@@ -166,11 +166,11 @@
      duration 0.2 s = seuil Apple HIG pour les changements d'état UI. */
   *, *::before, *::after {
     border-color: hsl(var(--border));
+    /* Only transition composited properties — box-shadow triggers repaint on Windows */
     transition-property: color, background-color, border-color,
-                         text-decoration-color, fill, stroke, box-shadow,
-                         opacity;
-    transition-duration: 0.2s;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); /* ease-in-out Apple */
+                         text-decoration-color, fill, stroke, opacity;
+    transition-duration: 0.18s;
+    transition-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1); /* iOS default easing */
   }
 
   body {
@@ -232,6 +232,14 @@
 
   /* ── View toggle ────────────────────────────────────────────────── */
   .hidden { display: none; }
+
+  /* ── GPU acceleration — forces composited layer on Windows/Chrome ── */
+  .gpu-layer {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    will-change: transform, opacity;
+  }
 
   /* ── Scrollbar hiding (iOS-style snap containers) ───────────────── */
   .no-scrollbar {
