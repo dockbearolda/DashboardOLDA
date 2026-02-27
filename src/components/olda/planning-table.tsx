@@ -10,14 +10,17 @@
  *   • Save dot     : indicateur bleu pulsant (iOS style) pendant le PATCH
  *   • Total live   : recalcul en temps réel dès frappe sur qté ou prix
  *   • Urgence      : fond rouge si échéance ≤ 1 jour ou dépassée
- *   • Priorité     : pastille cycle (Gris → Bleu → Orange)
+ *   • Priorité     : menu déroulant Apple (Basse / Moyenne / Haute)
+ *   • Désignation  : menu déroulant sélectif (Tshirt, Mug, Textile, Accessoire, Autre)
+ *   • Note         : auto-expand hauteur quand le texte va à la ligne
  *   • Couleur      : 5 pastilles de couleur par ligne
- *   • Keep-adding  : après validation, nouvelle ligne vide automatique
+ *   • Drag-reorder : poignée de glissement visible pour réordonner les lignes
+ *   • Keep-adding  : nouvelles lignes ajoutées en bas
  */
 
 import { useState, useCallback, useMemo, useRef, type CSSProperties } from "react";
 import { motion, Reorder, AnimatePresence } from "framer-motion";
-import { Trash2, Plus, ChevronDown } from "lucide-react";
+import { Trash2, Plus, ChevronDown, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -62,8 +65,6 @@ interface PlanningTableProps {
 
 // ── Constantes ─────────────────────────────────────────────────────────────────
 
-const PRIORITY_CYCLE = ["BASSE", "MOYENNE", "HAUTE"] as const;
-
 const PRIORITY_STYLE: Record<string, string> = {
   BASSE:   "bg-slate-200/80 text-slate-600",
   MOYENNE: "bg-blue-100 text-blue-600",
@@ -103,7 +104,17 @@ const TEAM = [
   { key: "renaud",   name: "Renaud"   },
 ] as const;
 
-const QTY_PRESETS = [1, 5, 10, 15, 20, 25, 30, 50, 75, 100, 150, 200, 300, 500];
+const QTY_PRESETS = [1, 2, 3, 5, 10, 15, 20, 25, 30, 50, 75, 100, 150, 200, 300, 500];
+
+const PRICE_PRESETS = [0, 5, 10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200, 300, 500];
+
+const DESIGNATION_OPTIONS = [
+  { value: "Tshirt",     label: "Tshirt" },
+  { value: "Mug",        label: "Mug" },
+  { value: "Textile",    label: "Textile" },
+  { value: "Accessoire", label: "Accessoire", needsPrecision: true },
+  { value: "Autre",      label: "Autre",      needsPrecision: true },
+] as const;
 
 // 5 codes couleur de ligne
 const COLORS = [
@@ -115,10 +126,9 @@ const COLORS = [
 ] as const;
 
 // ── Grille (13 colonnes) ───────────────────────────────────────────────────────
-// + | Priorité | Client | Désignation | Qté | Note | Prix u. | Total | Échéance | État | Interne | Couleur | ×
-// Inline style used (not Tailwind arbitrary class) to guarantee rendering after any column edit.
+// Grip | Priorité | Client | Désignation | Qté | Note | Prix u. | Total | Échéance | État | Interne | Couleur | ×
 
-const GRID_COLS = "50px 110px 150px minmax(140px,1fr) 70px 150px 78px 90px 120px minmax(150px,1fr) 116px 82px 50px";
+const GRID_COLS = "32px 90px 150px 110px 70px minmax(140px,1fr) 90px 90px 120px 120px 110px 82px 44px";
 const GRID_STYLE: CSSProperties = { gridTemplateColumns: GRID_COLS };
 
 const COL_HEADERS = [
@@ -151,10 +161,62 @@ const CELL_INPUT =
 const EMPTY_TEXT = "text-slate-300 italic font-normal";
 const CELL_WRAP  = "h-full flex items-center px-1.5 overflow-hidden min-w-0";
 
+// ── Apple-style select wrapper ─────────────────────────────────────────────────
+
+function AppleSelect({
+  value,
+  displayLabel,
+  onChange,
+  children,
+  className,
+  pillStyle,
+}: {
+  value: string;
+  displayLabel: string;
+  onChange: (v: string) => void;
+  children: React.ReactNode;
+  className?: string;
+  pillStyle?: string;
+}) {
+  return (
+    <div className={cn("relative w-full", className)}>
+      <div className={cn(
+        "flex items-center h-8 gap-1 px-2.5 rounded-lg border text-[13px]",
+        "border-slate-100 bg-white/50 text-slate-800",
+        "hover:bg-white hover:border-slate-200 cursor-pointer transition-all duration-100",
+        pillStyle
+      )}>
+        <span className="truncate flex-1">{displayLabel}</span>
+        <ChevronDown className="h-3 w-3 text-slate-400 shrink-0" />
+      </div>
+      <select
+        className="absolute inset-0 opacity-0 cursor-pointer w-full"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {children}
+      </select>
+    </div>
+  );
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function nextPriority(p: "BASSE" | "MOYENNE" | "HAUTE"): "BASSE" | "MOYENNE" | "HAUTE" {
-  return PRIORITY_CYCLE[(PRIORITY_CYCLE.indexOf(p) + 1) % 3];
+function toTitleCase(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+}
+
+function parseDesignation(d: string): { category: string; precision: string } {
+  if (!d) return { category: "", precision: "" };
+  for (const opt of DESIGNATION_OPTIONS) {
+    if ("needsPrecision" in opt && opt.needsPrecision && d.startsWith(opt.value + ": ")) {
+      return { category: opt.value, precision: d.slice(opt.value.length + 2) };
+    }
+    if (d === opt.value) return { category: opt.value, precision: "" };
+  }
+  return { category: d, precision: "" };
 }
 
 function isUrgent(deadline: string | null): boolean {
@@ -283,21 +345,19 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
     [updateItem]
   );
 
-  // ── Ajouter une ligne — optimiste : row visible immédiatement, DB en arrière-plan ──
+  // ── Ajouter une ligne (en bas) ──────────────────────────────────────────────
 
   const addRow = useCallback(() => {
-    // ID unique généré côté client pour éviter d'attendre la DB
     const newId    = `r${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
-    const position = (sorted[0]?.position ?? 1) - 1;
+    const maxPos   = sorted.length > 0 ? Math.max(...sorted.map((s) => s.position)) : 0;
+    const position = maxPos + 1;
     const newItem: PlanningItem = {
       id: newId, priority: "MOYENNE", clientName: "", quantity: 1,
       designation: "", note: "", unitPrice: 0, deadline: null,
       status: "A_DEVISER", responsible: "", color: "", position,
     };
-    // Affichage instantané + focus sur Client
-    onItemsChange?.([newItem, ...items]);
+    onItemsChange?.([...items, newItem]);
     setEditing(`${newId}:clientName`);
-    // Sauvegarde silencieuse en arrière-plan
     fetch("/api/planning", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
@@ -347,6 +407,22 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
     [items, onItemsChange]
   );
 
+  // ── Designation handler ────────────────────────────────────────────────────────
+
+  const handleDesignationSelect = useCallback(
+    (id: string, category: string) => {
+      const opt = DESIGNATION_OPTIONS.find((o) => o.value === category);
+      if (opt && "needsPrecision" in opt && opt.needsPrecision) {
+        updateItem(id, "designation", category);
+        setEditing(`${id}:designationPrecision`);
+      } else {
+        saveNow(id, "designation", category);
+        setEditing(null);
+      }
+    },
+    [saveNow, updateItem]
+  );
+
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
@@ -371,8 +447,7 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
 
       {/* ── Tableau (scroll horizontal) ─────────────────────────────────────── */}
       <div className="overflow-x-auto">
-        {/* min-width ≥ sum of fixed columns (≈1306px) to prevent grid collapse */}
-        <div className="min-w-[1400px]">
+        <div className="min-w-[1300px]">
 
           {/* En-têtes */}
           <div
@@ -403,6 +478,8 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
                 const isSaving   = savingIds.has(item.id);
                 const total      = item.quantity * item.unitPrice;
                 const urgent     = isUrgent(item.deadline);
+                const { category: desigCategory } = parseDesignation(item.designation);
+                const noteHasLines = item.note.includes("\n");
 
                 return (
                   <Reorder.Item key={item.id} value={item} as="div">
@@ -412,8 +489,9 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
                       exit={{ opacity: 0, x: 24, transition: { duration: 0.15 } }}
                       transition={{ type: "spring", stiffness: 500, damping: 42 }}
                       className={cn(
-                        "grid w-full h-[44px] border-b border-slate-100 group relative",
+                        "grid w-full border-b border-slate-100 group relative",
                         "transition-colors duration-100",
+                        noteHasLines ? "min-h-[44px]" : "h-[44px]",
                         getRowBg(item.color ?? "", urgent),
                         isDeleting && "pointer-events-none"
                       )}
@@ -433,142 +511,188 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
                         )}
                       </AnimatePresence>
 
-                      {/* 0. Ajouter une ligne */}
-                      <div className="h-full flex items-center justify-center">
-                        <button
-                          onClick={addRow}
-                          className={cn(
-                            "p-1.5 rounded-md transition-all duration-150",
-                            "text-slate-400 hover:text-blue-500 hover:bg-blue-50"
-                          )}
-                          aria-label="Ajouter une ligne"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
+                      {/* 0. Grip handle (drag) */}
+                      <div className="h-full flex items-center justify-center cursor-grab active:cursor-grabbing">
+                        <GripVertical className="h-3.5 w-3.5 text-slate-300 group-hover:text-slate-400 transition-colors" />
                       </div>
 
-                      {/* 1. Priorité */}
+                      {/* 1. Priorité — menu déroulant Apple */}
                       <div className={CELL_WRAP}>
-                        <button
-                          onClick={() => saveNow(item.id, "priority", nextPriority(item.priority))}
-                          className={cn(
-                            "px-2.5 py-1 rounded-full text-[11px] font-semibold",
-                            "transition-all duration-200 hover:opacity-75 active:scale-95 select-none",
-                            PRIORITY_STYLE[item.priority]
-                          )}
-                        >
-                          {PRIORITY_LABEL[item.priority]}
-                        </button>
+                        <div className="relative">
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold cursor-pointer",
+                              "transition-all duration-200 hover:opacity-75 active:scale-95 select-none",
+                              PRIORITY_STYLE[item.priority]
+                            )}
+                          >
+                            {PRIORITY_LABEL[item.priority]}
+                            <ChevronDown className="h-2.5 w-2.5 opacity-50" />
+                          </span>
+                          <select
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                            value={item.priority}
+                            onChange={(e) => saveNow(item.id, "priority", e.target.value)}
+                          >
+                            <option value="BASSE">Basse</option>
+                            <option value="MOYENNE">Moyenne</option>
+                            <option value="HAUTE">Haute</option>
+                          </select>
+                        </div>
                       </div>
 
-                      {/* 2. Client */}
+                      {/* 2. Client — Nom Prénom */}
                       <div className={CELL_WRAP}>
                         {isEditingCell(item.id, "clientName") ? (
                           <input
                             type="text"
                             value={item.clientName}
                             autoFocus
-                            onChange={(e) => updateItem(item.id, "clientName", e.target.value.toUpperCase())}
-                            onBlur={(e) => handleBlurSave(item.id, "clientName", e.target.value.toUpperCase())}
+                            onChange={(e) => updateItem(item.id, "clientName", toTitleCase(e.target.value))}
+                            onBlur={(e) => handleBlurSave(item.id, "clientName", toTitleCase(e.target.value))}
                             onKeyDown={(e) => handleKeyDown(e, item.id, "clientName")}
-                            className={cn(CELL_INPUT, "font-medium uppercase tracking-wide")}
-                            placeholder="NOM CLIENT"
+                            className={cn(CELL_INPUT, "font-medium")}
+                            placeholder="Nom Prénom"
                           />
                         ) : (
                           <div
                             onClick={() => startEdit(item.id, "clientName", item.clientName)}
-                            className={cn(CELL_DISPLAY, "font-medium uppercase tracking-wide", !item.clientName && EMPTY_TEXT)}
+                            className={cn(CELL_DISPLAY, "font-medium", !item.clientName && EMPTY_TEXT)}
                           >
-                            {item.clientName || "NOM CLIENT"}
+                            {item.clientName || "Nom Prénom"}
                           </div>
                         )}
                       </div>
 
-                      {/* 3. Désignation — avant Qté */}
+                      {/* 3. Désignation — menu déroulant sélectif */}
                       <div className={CELL_WRAP}>
-                        {isEditingCell(item.id, "designation") ? (
+                        {isEditingCell(item.id, "designationPrecision") ? (
                           <input
                             type="text"
-                            value={item.designation}
                             autoFocus
-                            onChange={(e) => updateItem(item.id, "designation", e.target.value)}
-                            onBlur={(e) => handleBlurSave(item.id, "designation", e.target.value)}
-                            onKeyDown={(e) => handleKeyDown(e, item.id, "designation")}
-                            className={CELL_INPUT}
-                            placeholder="Description du travail…"
+                            placeholder="Préciser…"
+                            defaultValue={parseDesignation(item.designation).precision}
+                            onBlur={(e) => {
+                              const precision = e.target.value.trim();
+                              const val = precision
+                                ? `${desigCategory}: ${precision}`
+                                : desigCategory;
+                              saveNow(item.id, "designation", val);
+                              setEditing(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === "Tab") {
+                                e.preventDefault();
+                                (e.currentTarget as HTMLElement).blur();
+                              } else if (e.key === "Escape") {
+                                setEditing(null);
+                              }
+                            }}
+                            className={cn(CELL_INPUT, "text-[12px]")}
                           />
                         ) : (
-                          <div
-                            onClick={() => startEdit(item.id, "designation", item.designation)}
-                            className={cn(CELL_DISPLAY, !item.designation && EMPTY_TEXT)}
+                          <AppleSelect
+                            value={desigCategory}
+                            displayLabel={item.designation || "Choisir…"}
+                            onChange={(v) => handleDesignationSelect(item.id, v)}
                           >
-                            {item.designation || "Désignation…"}
-                          </div>
+                            <option value="" disabled>Choisir…</option>
+                            {DESIGNATION_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </AppleSelect>
                         )}
                       </div>
 
-                      {/* 4. Quantité */}
+                      {/* 4. Quantité — menu déroulant Apple */}
                       <div className={CELL_WRAP}>
-                        {isEditingCell(item.id, "quantity") ? (
-                          <>
-                            <input
-                              type="number"
-                              list={`qty-${item.id}`}
-                              value={item.quantity}
-                              autoFocus
-                              onChange={(e) => updateItem(item.id, "quantity", parseFloat(e.target.value) || 1)}
-                              onBlur={(e) => handleBlurSave(item.id, "quantity", parseFloat(e.target.value) || 1)}
-                              onKeyDown={(e) => handleKeyDown(e, item.id, "quantity")}
-                              className={cn(CELL_INPUT, "text-center")}
-                              placeholder="1"
-                              min="1"
-                            />
-                            <datalist id={`qty-${item.id}`}>
-                              {QTY_PRESETS.map((v) => <option key={v} value={v} />)}
-                            </datalist>
-                          </>
-                        ) : (
-                          <div
-                            onClick={() => startEdit(item.id, "quantity", item.quantity)}
-                            className={cn(CELL_DISPLAY, "justify-center tabular-nums")}
-                          >
-                            {item.quantity}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 5. Note */}
-                      <div className={CELL_WRAP}>
-                        {isEditingCell(item.id, "note") ? (
+                        {isEditingCell(item.id, "quantityCustom") ? (
                           <input
-                            type="text"
+                            type="number"
+                            value={item.quantity}
+                            autoFocus
+                            onChange={(e) => updateItem(item.id, "quantity", parseFloat(e.target.value) || 1)}
+                            onBlur={(e) => {
+                              handleBlurSave(item.id, "quantity", parseFloat(e.target.value) || 1);
+                            }}
+                            onKeyDown={(e) => handleKeyDown(e, item.id, "quantity")}
+                            className={cn(CELL_INPUT, "text-center")}
+                            placeholder="1"
+                            min="1"
+                          />
+                        ) : (
+                          <AppleSelect
+                            value={QTY_PRESETS.includes(item.quantity) ? String(item.quantity) : "custom"}
+                            displayLabel={String(item.quantity)}
+                            onChange={(v) => {
+                              if (v === "custom") {
+                                preEdit.current = item.quantity;
+                                setEditing(`${item.id}:quantityCustom`);
+                              } else {
+                                saveNow(item.id, "quantity", Number(v));
+                              }
+                            }}
+                          >
+                            {QTY_PRESETS.map((q) => (
+                              <option key={q} value={String(q)}>{q}</option>
+                            ))}
+                            <option value="custom">Autre…</option>
+                          </AppleSelect>
+                        )}
+                      </div>
+
+                      {/* 5. Note — auto-expand */}
+                      <div className={cn(CELL_WRAP, "items-start py-1.5")}>
+                        {isEditingCell(item.id, "note") ? (
+                          <textarea
                             value={item.note}
                             autoFocus
+                            rows={Math.max(1, item.note.split("\n").length)}
                             onChange={(e) => updateItem(item.id, "note", e.target.value)}
                             onBlur={(e) => handleBlurSave(item.id, "note", e.target.value)}
-                            onKeyDown={(e) => handleKeyDown(e, item.id, "note")}
-                            className={cn(CELL_INPUT, "italic text-slate-600")}
+                            onKeyDown={(e) => {
+                              if (e.key === "Tab") {
+                                e.preventDefault();
+                                (e.currentTarget as HTMLElement).blur();
+                              } else if (e.key === "Escape") {
+                                updateItem(item.id, "note", preEdit.current);
+                                setEditing(null);
+                              }
+                            }}
+                            className={cn(
+                              "w-full px-2.5 py-1.5 text-[13px] text-slate-900 bg-white rounded-lg",
+                              "border border-blue-300 ring-2 ring-blue-100/70 shadow-sm focus:outline-none",
+                              "italic text-slate-600 resize-none"
+                            )}
                             placeholder="Précisions…"
                           />
                         ) : (
                           <div
                             onClick={() => startEdit(item.id, "note", item.note)}
-                            className={cn(CELL_DISPLAY, "italic text-slate-500", !item.note && EMPTY_TEXT)}
+                            className={cn(
+                              "w-full px-2.5 py-1.5 text-[13px] text-slate-500 rounded-lg cursor-text",
+                              "hover:bg-black/[0.03] active:bg-black/[0.05]",
+                              "transition-colors duration-100 select-none italic",
+                              "whitespace-pre-wrap break-words",
+                              !item.note && EMPTY_TEXT
+                            )}
                           >
                             {item.note || "Précisions…"}
                           </div>
                         )}
                       </div>
 
-                      {/* 6. Prix unitaire */}
+                      {/* 6. Prix unitaire — menu déroulant Apple */}
                       <div className={CELL_WRAP}>
-                        {isEditingCell(item.id, "unitPrice") ? (
+                        {isEditingCell(item.id, "unitPriceCustom") ? (
                           <input
                             type="number"
                             value={item.unitPrice || ""}
                             autoFocus
                             onChange={(e) => updateItem(item.id, "unitPrice", parseFloat(e.target.value) || 0)}
-                            onBlur={(e) => handleBlurSave(item.id, "unitPrice", parseFloat(e.target.value) || 0)}
+                            onBlur={(e) => {
+                              handleBlurSave(item.id, "unitPrice", parseFloat(e.target.value) || 0);
+                            }}
                             onKeyDown={(e) => handleKeyDown(e, item.id, "unitPrice")}
                             className={cn(CELL_INPUT, "text-right")}
                             placeholder="0"
@@ -576,16 +700,29 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
                             step="0.01"
                           />
                         ) : (
-                          <div
-                            onClick={() => startEdit(item.id, "unitPrice", item.unitPrice)}
-                            className={cn(CELL_DISPLAY, "justify-end tabular-nums", !item.unitPrice && EMPTY_TEXT)}
+                          <AppleSelect
+                            value={PRICE_PRESETS.includes(item.unitPrice) ? String(item.unitPrice) : "custom"}
+                            displayLabel={item.unitPrice ? `${item.unitPrice.toFixed(2)} €` : "—"}
+                            onChange={(v) => {
+                              if (v === "custom") {
+                                preEdit.current = item.unitPrice;
+                                setEditing(`${item.id}:unitPriceCustom`);
+                              } else {
+                                saveNow(item.id, "unitPrice", Number(v));
+                              }
+                            }}
                           >
-                            {item.unitPrice ? `${item.unitPrice.toFixed(2)}` : "—"}
-                          </div>
+                            {PRICE_PRESETS.map((p) => (
+                              <option key={p} value={String(p)}>
+                                {p === 0 ? "—" : `${p.toFixed(2)} €`}
+                              </option>
+                            ))}
+                            <option value="custom">Autre…</option>
+                          </AppleSelect>
                         )}
                       </div>
 
-                      {/* 7. Total — lecture seule, no wrap */}
+                      {/* 7. Total — lecture seule */}
                       <div
                         className={cn(
                           "h-full flex items-center justify-end px-3",
@@ -628,53 +765,32 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
                         )}
                       </div>
 
-                      {/* 9. État */}
+                      {/* 9. État — réduit */}
                       <div className={CELL_WRAP}>
-                        <div className="relative w-full">
-                          <div className={cn(
-                            "flex items-center h-8 gap-1 px-2.5 rounded-lg border text-[13px]",
-                            "border-slate-100 bg-white/50 text-slate-800",
-                            "hover:bg-white hover:border-slate-200 cursor-pointer transition-all duration-100"
-                          )}>
-                            <span className="truncate flex-1">{STATUS_LABELS[item.status]}</span>
-                            <ChevronDown className="h-3 w-3 text-slate-400 shrink-0" />
-                          </div>
-                          <select
-                            className="absolute inset-0 opacity-0 cursor-pointer w-full"
-                            value={item.status}
-                            onChange={(e) => saveNow(item.id, "status", e.target.value as PlanningStatus)}
-                          >
-                            {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                              <option key={key} value={key}>{label}</option>
-                            ))}
-                          </select>
-                        </div>
+                        <AppleSelect
+                          value={item.status}
+                          displayLabel={STATUS_LABELS[item.status]}
+                          onChange={(v) => saveNow(item.id, "status", v as PlanningStatus)}
+                        >
+                          {Object.entries(STATUS_LABELS).map(([key, label]) => (
+                            <option key={key} value={key}>{label}</option>
+                          ))}
+                        </AppleSelect>
                       </div>
 
                       {/* 10. Interne */}
                       <div className={CELL_WRAP}>
-                        <div className="relative w-full">
-                          <div className={cn(
-                            "flex items-center h-8 gap-1 px-2.5 rounded-lg border text-[13px]",
-                            "border-slate-100 bg-white/50 text-slate-800",
-                            "hover:bg-white hover:border-slate-200 cursor-pointer transition-all duration-100"
-                          )}>
-                            <span className="truncate flex-1 font-medium">
-                              {TEAM.find((p) => p.key === item.responsible)?.name || "—"}
-                            </span>
-                            <ChevronDown className="h-3 w-3 text-slate-400 shrink-0" />
-                          </div>
-                          <select
-                            className="absolute inset-0 opacity-0 cursor-pointer w-full"
-                            value={item.responsible}
-                            onChange={(e) => saveNow(item.id, "responsible", e.target.value)}
-                          >
-                            <option value="">—</option>
-                            {TEAM.map((p) => (
-                              <option key={p.key} value={p.key}>{p.name}</option>
-                            ))}
-                          </select>
-                        </div>
+                        <AppleSelect
+                          value={item.responsible}
+                          displayLabel={TEAM.find((p) => p.key === item.responsible)?.name || "—"}
+                          onChange={(v) => saveNow(item.id, "responsible", v)}
+                          pillStyle="font-medium"
+                        >
+                          <option value="">—</option>
+                          {TEAM.map((p) => (
+                            <option key={p.key} value={p.key}>{p.name}</option>
+                          ))}
+                        </AppleSelect>
                       </div>
 
                       {/* 11. Couleur */}
