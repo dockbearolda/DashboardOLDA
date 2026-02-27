@@ -16,7 +16,8 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:backup": "bash scripts/backup-db.sh"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.4.1",
