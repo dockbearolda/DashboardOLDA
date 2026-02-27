@@ -157,11 +157,11 @@ const TABS: { key: TabKey; label: string; secteur: string | null }[] = [
   { key: "goodies",       label: "Goodies",            secteur: "Goodies"                   },
 ];
 
-// ── Grid layout (12 columns) ────────────────────────────────────────────────────
-// Grip | Type | Priorité | Client | Secteur | Famille | Qté | Note | Échéance | État | Interne | ×
+// ── Grid layout (11 columns) ────────────────────────────────────────────────────
+// Grip | Type | Priorité | Client | Secteur | Qté | Note | Échéance | État | Interne | ×
 
 const GRID_COLS =
-  "32px 76px 94px 175px 158px 142px 64px minmax(110px,1fr) 150px 172px 108px 40px";
+  "32px 76px 94px 175px 158px 64px minmax(110px,1fr) 150px 172px 108px 40px";
 const GRID_STYLE: CSSProperties = { gridTemplateColumns: GRID_COLS };
 
 const COL_HEADERS = [
@@ -170,7 +170,6 @@ const COL_HEADERS = [
   { label: "Priorité", align: "left"   },
   { label: "Client",   align: "left"   },
   { label: "Secteur",  align: "left"   },
-  { label: "Famille",  align: "left"   },
   { label: "Qté",      align: "center" },
   { label: "Note",     align: "left"   },
   { label: "Échéance", align: "left"   },
@@ -307,7 +306,7 @@ function TypePicker({ value, onChange }: { value: ItemType; onChange: (v: ItemTy
   );
 }
 
-// Note cell — truncate + tooltip + edit (feature 3)
+// Note cell — expansion verticale au clic, affichage multi-ligne en lecture
 function NoteCell({
   note,
   isEditing,
@@ -324,7 +323,7 @@ function NoteCell({
   onCancel:    () => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const isLong = note.length > 32 || note.includes("\n");
+  const lines       = Math.max(2, note.split("\n").length);
 
   if (isEditing) {
     return (
@@ -332,53 +331,34 @@ function NoteCell({
         ref={textareaRef}
         value={note}
         autoFocus
-        rows={3}
+        rows={lines}
         onChange={(e) => onUpdate(e.target.value)}
-        onBlur={(e) => onBlurSave(e.target.value)}
+        onBlur={(e)   => onBlurSave(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Tab")    { e.preventDefault(); textareaRef.current?.blur(); }
           if (e.key === "Escape") { e.preventDefault(); onCancel(); }
         }}
         className={cn(
-          "w-full px-2.5 py-2 text-[13px] italic text-slate-600 bg-white rounded-xl",
+          "w-full px-2.5 py-1.5 text-[13px] italic text-slate-600 bg-white rounded-xl",
           "border border-blue-300 ring-2 ring-blue-100/70 shadow-lg focus:outline-none resize-none",
-          "z-30 relative",
         )}
         placeholder="Précisions…"
-        style={{ minWidth: "200px" }}
       />
     );
   }
 
+  // Lecture : affiche tout le texte, multi-ligne → agrandit la ligne
   return (
-    <div className="relative group/note w-full">
-      <div
-        onClick={onStartEdit}
-        className={cn(
-          "w-full h-8 px-2.5 text-[13px] rounded-lg cursor-text flex items-center",
-          "hover:bg-black/[0.03] transition-colors duration-100 select-none",
-          note ? "text-slate-500 italic" : EMPTY_CLS,
-        )}
-      >
-        <span className="truncate">{note || "Précisions…"}</span>
-      </div>
-
-      {/* Tooltip on hover for long notes */}
-      {isLong && note && (
-        <div
-          className={cn(
-            "absolute z-50 bottom-full left-0 mb-2 max-w-xs pointer-events-none",
-            "opacity-0 group-hover/note:opacity-100 transition-opacity duration-200 delay-300",
-            "bg-slate-800/95 backdrop-blur-sm text-white text-[12px] rounded-xl",
-            "px-3 py-2.5 shadow-xl whitespace-pre-wrap leading-relaxed",
-          )}
-          style={{ minWidth: "180px" }}
-        >
-          {note}
-          {/* Arrow */}
-          <span className="absolute top-full left-5 border-4 border-transparent border-t-slate-800/95" />
-        </div>
+    <div
+      onClick={onStartEdit}
+      className={cn(
+        "w-full px-2.5 text-[13px] rounded-lg cursor-text leading-snug",
+        "hover:bg-black/[0.03] transition-colors duration-100 select-none",
+        "whitespace-pre-wrap break-words",
+        note ? "text-slate-500 italic" : EMPTY_CLS,
       )}
+    >
+      {note || "Précisions…"}
     </div>
   );
 }
@@ -844,7 +824,7 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
                         "grid w-full border-b border-slate-100 group relative",
                         "transition-colors duration-100",
                         "border-l-4", typeConfig.border,
-                        isNoteEdit ? "min-h-[44px]" : "h-[44px]",
+                        "min-h-[44px]",
                         rowBg,
                         isDeleting && "pointer-events-none",
                       )}
@@ -933,21 +913,7 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
                         />
                       </div>
 
-                      {/* 5 · Famille (feature 2 — ex Désignation) */}
-                      <div className={CELL_WRAP}>
-                        <AppleSelect
-                          value={item.designation}
-                          displayLabel={item.designation || "—"}
-                          onChange={(v) => saveNow(item.id, "designation", v)}
-                        >
-                          <option value="">—</option>
-                          {FAMILLE_OPTIONS.map((f) => (
-                            <option key={f} value={f}>{f}</option>
-                          ))}
-                        </AppleSelect>
-                      </div>
-
-                      {/* 6 · Quantité — input direct sans flèches (feature 5) */}
+                      {/* 5 · Quantité — input direct sans flèches (feature 5) */}
                       <div className={CELL_WRAP}>
                         {isEditingCell(item.id, "quantity") ? (
                           <input
@@ -980,11 +946,8 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
                         )}
                       </div>
 
-                      {/* 7 · Note — truncate + tooltip + expand (feature 3) */}
-                      <div className={cn(
-                        "px-1.5 min-w-0 overflow-visible",
-                        isNoteEdit ? "flex items-start py-1.5" : "flex items-center h-full",
-                      )}>
+                      {/* 6 · Note — multi-ligne → agrandit la ligne verticalement */}
+                      <div className="px-1.5 py-[13px] min-w-0 overflow-visible">
                         <NoteCell
                           note={item.note}
                           isEditing={isNoteEdit}
@@ -995,7 +958,7 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
                         />
                       </div>
 
-                      {/* 8 · Échéance hybride JJ/MM + calendrier (feature 6) */}
+                      {/* 7 · Échéance hybride JJ/MM + calendrier (feature 6) */}
                       <div className={CELL_WRAP}>
                         <HybridDateInput
                           value={item.deadline}
@@ -1004,7 +967,7 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
                         />
                       </div>
 
-                      {/* 9 · État */}
+                      {/* 8 · État */}
                       <div className={CELL_WRAP}>
                         <AppleSelect
                           value={item.status}
@@ -1017,7 +980,7 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
                         </AppleSelect>
                       </div>
 
-                      {/* 10 · Interne */}
+                      {/* 9 · Interne */}
                       <div className={CELL_WRAP}>
                         <AppleSelect
                           value={item.responsible}
@@ -1032,7 +995,7 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
                         </AppleSelect>
                       </div>
 
-                      {/* 11 · Supprimer */}
+                      {/* 10 · Supprimer */}
                       <div className="h-full flex items-center justify-center">
                         <button
                           onClick={() => handleDelete(item.id)}
