@@ -177,21 +177,21 @@ const GRID_STYLE: CSSProperties = { gridTemplateColumns: GRID_COLS };
 const COL_HEADERS = [
   { label: "",         align: "center" },
   { label: "Type",     align: "center" },
-  { label: "Priorité", align: "left"   },
+  { label: "Priorité", align: "center" },
   { label: "Client",   align: "left"   },
   { label: "Secteur",  align: "left"   },
   { label: "Qté",      align: "center" },
   { label: "Note",     align: "left"   },
   { label: "Échéance", align: "left"   },
   { label: "État",     align: "left"   },
-  { label: "Interne",  align: "center" },
+  { label: "Interne",  align: "left"   },
   { label: "",         align: "center" },
 ] as const;
 
 // ── Shared styles ───────────────────────────────────────────────────────────────
 
 const CELL_INPUT =
-  "w-full h-8 px-2.5 text-[13px] text-slate-900 bg-white rounded-lg " +
+  "w-full h-8 px-2.5 text-[12px] text-slate-900 bg-white rounded-lg " +
   "border border-blue-300 ring-2 ring-blue-100/70 shadow-sm focus:outline-none";
 
 const EMPTY_CLS  = "text-slate-300 italic font-normal";
@@ -309,7 +309,7 @@ function TypePicker({ value, onChange }: { value: ItemType; onChange: (v: ItemTy
       onClick={cycle}
       title="Cliquer pour changer le type"
       className={cn(
-        "px-2 py-0.5 rounded-md text-[10px] font-bold tracking-widest",
+        "px-2 py-0.5 rounded-md text-[11px] font-bold tracking-widest",
         "transition-all duration-150 active:scale-95 select-none whitespace-nowrap",
         cfg.badge,
       )}
@@ -352,7 +352,7 @@ function NoteCell({
           if (e.key === "Escape") { e.preventDefault(); onCancel(); }
         }}
         className={cn(
-          "w-full px-2 py-1 text-[10px] italic text-slate-600 bg-white rounded-xl",
+          "w-full px-2 py-1 text-[12px] italic text-slate-600 bg-white rounded-xl",
           "border border-blue-300 ring-2 ring-blue-100/70 shadow-lg focus:outline-none resize-none",
         )}
         placeholder="Précisions…"
@@ -365,7 +365,7 @@ function NoteCell({
     <div
       onClick={onStartEdit}
       className={cn(
-        "w-full px-2 text-[10px] rounded-lg cursor-text leading-snug",
+        "w-full px-2 text-[12px] rounded-lg cursor-text leading-snug",
         "hover:bg-black/[0.03] transition-colors duration-100 select-none",
         "whitespace-pre-wrap break-words",
         note ? "text-slate-500 italic" : EMPTY_CLS,
@@ -384,11 +384,10 @@ function SecteurPicker({ value, onChange }: { value: string; onChange: (v: strin
       <div className={cn(
         "flex items-center h-8 gap-1.5 px-2.5 rounded-lg border text-[12px] font-medium cursor-pointer",
         "transition-all duration-100",
-        cfg
-          ? cn(cfg.pill, "hover:opacity-80")
-          : "bg-white/50 border-slate-100 text-slate-400 hover:bg-white hover:border-slate-200",
+        "bg-white/50 border-slate-100 hover:bg-white hover:border-slate-200",
+        cfg ? "text-slate-700" : "text-slate-400",
       )}>
-        {cfg && <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", cfg.dot)} />}
+        {cfg && <span className={cn("w-2 h-2 rounded-full flex-shrink-0 shrink-0", cfg.dot)} />}
         <span className="truncate flex-1">{cfg?.label ?? "—"}</span>
         <ChevronDown className="h-3 w-3 opacity-50 shrink-0" />
       </div>
@@ -419,7 +418,7 @@ function AppleSelect({
   return (
     <div className="relative w-full">
       <div className={cn(
-        "flex items-center h-8 gap-1 px-2.5 rounded-lg border text-[13px]",
+        "flex items-center h-8 gap-1 px-2.5 rounded-lg border text-[12px]",
         "border-slate-100 bg-white/50 text-slate-800",
         "hover:bg-white hover:border-slate-200 cursor-pointer transition-all duration-100",
         pillStyle,
@@ -502,7 +501,7 @@ function HybridDateInput({
         placeholder="JJ/MM/AA"
         maxLength={8}
         className={cn(
-          "w-[82px] shrink-0 h-8 px-2 text-[13px] rounded-lg border bg-transparent",
+          "w-[82px] shrink-0 h-8 px-2 text-[12px] rounded-lg border bg-transparent",
           "focus:outline-none focus:ring-2 focus:border-blue-300 focus:ring-blue-100/70 focus:bg-white",
           "transition-all duration-100 tabular-nums",
           urgent
@@ -638,7 +637,7 @@ function ClientNameCell({
       <div
         onClick={onStartEdit}
         className={cn(
-          "w-full h-8 px-2.5 text-[13px] rounded-lg cursor-text font-medium",
+          "w-full h-8 px-2.5 text-[12px] rounded-lg cursor-text font-medium",
           "flex items-center gap-1.5 hover:bg-black/[0.03] transition-colors duration-100 select-none truncate",
           value ? "text-slate-800" : EMPTY_CLS,
         )}
@@ -958,10 +957,6 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
           <span>Ajouter</span>
         </button>
 
-        {/* Compteur total */}
-        <span className="text-[12px] text-slate-400 font-medium tabular-nums">
-          {sorted.length} ligne{sorted.length !== 1 ? "s" : ""}
-        </span>
 
         {/* Filtre par personne */}
         {filterPerson && (
@@ -1100,7 +1095,7 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
                         <div className="relative w-full">
                           <span className={cn(
                             "flex items-center justify-center gap-1 h-7 px-2.5 rounded-full",
-                            "text-[11px] font-semibold cursor-pointer select-none w-full",
+                            "text-[12px] font-semibold cursor-pointer select-none w-full",
                             "transition-all duration-150 hover:opacity-75 active:scale-95",
                             PRIORITY_CONFIG[item.priority].style,
                           )}>
@@ -1175,7 +1170,7 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
                           <div
                             onClick={() => startEdit(item.id, "quantity", item.quantity)}
                             className={cn(
-                              "w-full h-8 px-2.5 text-[13px] text-slate-800 rounded-lg cursor-text",
+                              "w-full h-8 px-2.5 text-[12px] text-slate-800 rounded-lg cursor-text",
                               "flex items-center justify-center font-semibold tabular-nums",
                               "hover:bg-black/[0.03] transition-colors duration-100 select-none",
                             )}
