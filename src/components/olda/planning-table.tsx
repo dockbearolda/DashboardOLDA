@@ -451,10 +451,15 @@ function HybridDateInput({
 
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
-    setText(raw);
-    // Auto-parse dès que le format DD/MM est complet
-    if (raw.length >= 5 && (raw.length < 7 || raw.length >= 8)) {
-      const parsed = parseDDMM(raw);
+    // Garder uniquement les chiffres et reformater avec les /
+    const digits = raw.replace(/\D/g, "").slice(0, 6);
+    let formatted = digits.slice(0, 2);
+    if (digits.length >= 3) formatted += "/" + digits.slice(2, 4);
+    if (digits.length >= 5) formatted += "/" + digits.slice(4, 6);
+    setText(formatted);
+    // Auto-parse quand les 6 chiffres sont saisis (JJ/MM/AA)
+    if (digits.length === 6) {
+      const parsed = parseDDMM(formatted);
       if (parsed) onChange(parsed);
     }
   };
