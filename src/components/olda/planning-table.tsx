@@ -164,7 +164,7 @@ const TABS: { key: TabKey; label: string; secteur: string | null }[] = [
 // Grip | Type | Priorité | Client | Secteur | Qté | Note | Échéance | État | Interne | ×
 
 const GRID_COLS =
-  "32px 76px 94px 175px 158px 64px minmax(110px,1fr) 165px 172px 108px 40px";
+  "32px 76px 94px 175px 158px 64px minmax(78px,1fr) 165px 172px 108px 40px";
 const GRID_STYLE: CSSProperties = { gridTemplateColumns: GRID_COLS };
 
 const COL_HEADERS = [
@@ -264,7 +264,7 @@ function toTitleCase(s: string): string {
 function SearchBar({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div className={cn(
-      "flex items-center gap-2.5 h-9 px-3.5 rounded-xl flex-1",
+      "flex items-center gap-2.5 h-9 px-3.5 rounded-xl w-full",
       "bg-white/60 backdrop-blur-md border border-slate-200/80 shadow-sm",
       "transition-all duration-200",
       "focus-within:bg-white focus-within:border-blue-200 focus-within:shadow-blue-50",
@@ -783,7 +783,10 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
         >
           <Plus className="h-4 w-4" />
         </button>
-        {/* Feature 1: Search bar */}
+      </div>
+
+      {/* ── Search bar (pleine largeur) ────────────────────────────────── */}
+      <div className="px-4 py-2.5 border-b border-slate-100 bg-white">
         <SearchBar value={search} onChange={setSearch} />
       </div>
 
