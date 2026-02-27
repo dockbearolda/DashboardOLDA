@@ -752,7 +752,7 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
       </div>
 
       {/* ── Tabs (feature 8) ────────────────────────────────────────────────── */}
-      <div className="flex items-end gap-0.5 px-4 border-b border-slate-100 bg-slate-50/50 overflow-x-auto">
+      <div className="flex justify-center items-end gap-0.5 px-4 border-b border-slate-100 bg-slate-50/50 overflow-x-auto">
         {TABS.map((tab) => {
           const active = activeTab === tab.key;
           const count  = tabCounts[tab.key];
