@@ -627,16 +627,22 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
       .catch(() => {});
   }, []);
 
-  // ── Planning items ────────────────────────────────────────────────────────────
+  // ── Planning items ─────────────────────────────────────────────────────────
+  // Chargement initial + polling de secours toutes les 10 s
+  // (le socket temps réel prend le relais si disponible)
 
-  useEffect(() => {
+  const fetchPlanning = useCallback(() => {
     fetch("/api/planning")
       .then((r) => r.json())
-      .then((data) => {
-        setPlanningItems(data.items ?? []);
-      })
+      .then((data) => { setPlanningItems(data.items ?? []); })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetchPlanning();
+    const id = setInterval(fetchPlanning, 10_000);
+    return () => clearInterval(id);
+  }, [fetchPlanning]);
 
   // ── Connexion / Déconnexion ────────────────────────────────────────────────
   const handleLogin = useCallback((name: string) => {
