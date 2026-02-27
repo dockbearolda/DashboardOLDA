@@ -157,10 +157,23 @@ model UserProfile {
   @@map("user_profiles")
 }
 
+model Client {
+  id            String         @id @default(cuid())
+  nom           String
+  telephone     String         @default("")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  planningItems PlanningItem[]
+
+  @@map("clients")
+}
+
 model PlanningItem {
   id          String           @id @default(cuid())
   priority    PlanningPriority @default(MOYENNE)
   clientName  String           @default("")
+  clientId    String?          @map("client_id")
+  client      Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
   quantity    Float            @default(1)
   designation String           @default("")
   note        String           @default("")

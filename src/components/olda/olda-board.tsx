@@ -21,6 +21,7 @@ import { DTFProductionTable } from "./dtf-production-table";
 import { WorkflowListsGrid } from "./workflow-list";
 import { PRTManager } from "./prt-manager";
 import { PlanningTable, type PlanningItem } from "./planning-table";
+import { ClientProTable, type ClientItem } from "./client-pro-table";
 
 interface PRTItem {
   id: string;
@@ -425,11 +426,12 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
   const [sseConnected, setSseConnected] = useState(false);
   const [notes, setNotes]               = useState<Record<string, NoteData>>({});
   const [notesReady, setNotesReady]     = useState(false);
-  const [viewTab, setViewTab] = useState<'flux' | 'commandes' | 'production_dtf' | 'workflow' | 'demande_prt' | 'planning'>('flux');
+  const [viewTab, setViewTab] = useState<'flux' | 'commandes' | 'production_dtf' | 'workflow' | 'demande_prt' | 'planning' | 'clients_pro'>('flux');
   const [workflowItems, setWorkflowItems] = useState<WorkflowItem[]>([]);
   const [prtItems, setPrtItems] = useState<PRTItem[]>([]);
   const [allPrtItems, setAllPrtItems] = useState<PRTItem[]>([]);
   const [planningItems, setPlanningItems] = useState<PlanningItem[]>([]);
+  const [clientItems, setClientItems] = useState<ClientItem[]>([]);
 
   const addOrder = async () => {
     const res = await fetch("/api/orders/manual", { method: "POST" });
@@ -651,6 +653,23 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
     return () => clearInterval(id);
   }, [fetchPlanning]);
 
+  // ── Client Pro items ───────────────────────────────────────────────────────
+  const fetchClients = useCallback(() => {
+    fetch("/api/clients")
+      .then((r) => r.json())
+      .then((data) => { setClientItems(data.clients ?? []); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchClients();
+  }, [fetchClients]);
+
+  // Refresh clients when switching to the clients_pro tab
+  useEffect(() => {
+    if (viewTab === "clients_pro") fetchClients();
+  }, [viewTab, fetchClients]);
+
   // ── Connexion / Déconnexion ────────────────────────────────────────────────
   const handleLogin = useCallback((name: string) => {
     const s = saveSession(name);
@@ -708,7 +727,7 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
         {/* Tabs — centrés */}
         <div className="flex items-center gap-3">
           <div className="flex gap-1 p-1 rounded-xl bg-gray-100/80 overflow-x-auto">
-            {(['flux', 'commandes', 'demande_prt', 'production_dtf', 'workflow', 'planning'] as const).map((v) => (
+            {(['flux', 'commandes', 'demande_prt', 'production_dtf', 'workflow', 'planning', 'clients_pro'] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => setViewTab(v)}
@@ -720,7 +739,7 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
                     : "text-gray-500 hover:text-gray-700"
                 )}
               >
-                {v === 'flux' ? 'Flux' : v === 'commandes' ? 'Commandes' : v === 'demande_prt' ? 'Demande de PRT' : v === 'production_dtf' ? 'Production' : v === 'workflow' ? 'Gestion d\'atelier' : 'Planning'}
+                {v === 'flux' ? 'Flux' : v === 'commandes' ? 'Commandes' : v === 'demande_prt' ? 'Demande de PRT' : v === 'production_dtf' ? 'Production' : v === 'workflow' ? 'Gestion d\'atelier' : v === 'planning' ? 'Planning' : 'Clients Pro'}
               </button>
             ))}
           </div>
@@ -801,6 +820,14 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
             items={planningItems}
             onItemsChange={setPlanningItems}
             onEditingChange={(isEditing) => { planningEditingRef.current = isEditing; }}
+          />
+        </div>
+
+        {/* ══ VUE CLIENTS PRO — Base de données clients ═══════════════════════ */}
+        <div className={cn(viewTab !== 'clients_pro' && 'hidden', 'h-full')}>
+          <ClientProTable
+            clients={clientItems}
+            onClientsChange={setClientItems}
           />
         </div>
 

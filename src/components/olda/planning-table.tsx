@@ -21,7 +21,7 @@ import {
 } from "react";
 import { motion, Reorder, AnimatePresence } from "framer-motion";
 import {
-  Trash2, Plus, ChevronDown, GripVertical, Search, Calendar, X,
+  Trash2, Plus, ChevronDown, GripVertical, Search, Calendar, X, User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSocket } from "@/hooks/useSocket";
@@ -32,6 +32,7 @@ export interface PlanningItem {
   id: string;
   priority:    "BASSE" | "MOYENNE" | "HAUTE";
   clientName:  string;
+  clientId:    string | null;
   designation: string;   // mapped to « Famille » in UI
   quantity:    number;
   note:        string;
@@ -41,6 +42,12 @@ export interface PlanningItem {
   responsible: string;
   color:       string;   // stores secteur value
   position:    number;
+}
+
+export interface ClientSuggestion {
+  id: string;
+  nom: string;
+  telephone: string;
 }
 
 export type PlanningStatus =
@@ -534,6 +541,167 @@ function HybridDateInput({
   );
 }
 
+// ── Client name cell with autocomplete ─────────────────────────────────────────
+function ClientNameCell({
+  value,
+  clientId,
+  isEditing,
+  onStartEdit,
+  onChange,
+  onBlurSave,
+  onKeyDown,
+  onSelectClient,
+}: {
+  value:          string;
+  clientId:       string | null;
+  isEditing:      boolean;
+  onStartEdit:    () => void;
+  onChange:       (v: string) => void;
+  onBlurSave:     (v: string) => void;
+  onKeyDown:      (e: React.KeyboardEvent) => void;
+  onSelectClient: (client: ClientSuggestion) => void;
+}) {
+  const [suggestions, setSuggestions] = useState<ClientSuggestion[]>([]);
+  const [showDrop, setShowDrop]       = useState(false);
+  const [activeIdx, setActiveIdx]     = useState(-1);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Fetch suggestions with debounce
+  const fetchSuggestions = useCallback((q: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!q.trim()) { setSuggestions([]); setShowDrop(false); return; }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res  = await fetch(`/api/clients?search=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        const list: ClientSuggestion[] = (data.clients ?? []).map((c: ClientSuggestion) => ({
+          id:        c.id,
+          nom:       c.nom,
+          telephone: c.telephone,
+        }));
+        setSuggestions(list);
+        setShowDrop(list.length > 0);
+        setActiveIdx(-1);
+      } catch { /* ignore */ }
+    }, 180);
+  }, []);
+
+  const handleChange = (v: string) => {
+    onChange(v);
+    fetchSuggestions(v);
+  };
+
+  const handleSelect = (client: ClientSuggestion) => {
+    setShowDrop(false);
+    setSuggestions([]);
+    onSelectClient(client);
+  };
+
+  const handleKeyDownWrapper = (e: React.KeyboardEvent) => {
+    if (showDrop && suggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveIdx((i) => Math.min(i + 1, suggestions.length - 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIdx((i) => Math.max(i - 1, 0));
+        return;
+      }
+      if (e.key === "Enter" && activeIdx >= 0) {
+        e.preventDefault();
+        handleSelect(suggestions[activeIdx]);
+        return;
+      }
+      if (e.key === "Escape") {
+        setShowDrop(false);
+        setSuggestions([]);
+      }
+    }
+    onKeyDown(e);
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    // Delay blur so click on suggestion fires first
+    setTimeout(() => {
+      if (!containerRef.current?.contains(document.activeElement)) {
+        setShowDrop(false);
+        onBlurSave(e.target.value);
+      }
+    }, 150);
+  };
+
+  if (!isEditing) {
+    return (
+      <div
+        onClick={onStartEdit}
+        className={cn(
+          "w-full h-8 px-2.5 text-[13px] rounded-lg cursor-text font-medium",
+          "flex items-center gap-1.5 hover:bg-black/[0.03] transition-colors duration-100 select-none truncate",
+          value ? "text-slate-800" : EMPTY_CLS,
+        )}
+      >
+        {clientId && (
+          <User className="h-3 w-3 text-blue-400 shrink-0" />
+        )}
+        {value || "Nom Prénom"}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <input
+        type="text"
+        value={value}
+        autoFocus
+        onChange={(e) => handleChange(toTitleCase(e.target.value))}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDownWrapper}
+        className={cn(CELL_INPUT, "font-medium")}
+        placeholder="Nom Prénom"
+      />
+      {showDrop && (
+        <div
+          className={cn(
+            "absolute z-50 top-full left-0 mt-1 min-w-[220px] w-max max-w-[320px]",
+            "bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden",
+          )}
+        >
+          {suggestions.map((s, idx) => (
+            <button
+              key={s.id}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); handleSelect(s); }}
+              className={cn(
+                "w-full flex items-center gap-2.5 px-3 py-2 text-left",
+                "transition-colors duration-75",
+                idx === activeIdx
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-slate-700 hover:bg-slate-50",
+              )}
+            >
+              <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                <span className="text-[10px] font-bold text-blue-500">
+                  {s.nom.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold truncate">{s.nom}</p>
+                {s.telephone && (
+                  <p className="text-[11px] text-slate-400 truncate">{s.telephone}</p>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ──────────────────────────────────────────────────────────────
 
 export function PlanningTable({ items, onItemsChange, onEditingChange }: PlanningTableProps) {
@@ -715,7 +883,7 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
     const maxPos   = sorted.length > 0 ? Math.max(...sorted.map((s) => s.position)) : 0;
     const position = maxPos + 1;
     const newItem: PlanningItem = {
-      id: newId, priority: "MOYENNE", clientName: "", quantity: 1,
+      id: newId, priority: "MOYENNE", clientName: "", clientId: null, quantity: 1,
       designation: "", note: "", unitPrice: 0, deadline: null,
       status: "A_DEVISER", responsible: "", color: "", position,
     };
@@ -953,29 +1121,27 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
 
                       {/* 3 · Client */}
                       <div className={CELL_WRAP}>
-                        {isEditingCell(item.id, "clientName") ? (
-                          <input
-                            type="text"
-                            value={item.clientName}
-                            autoFocus
-                            onChange={(e) => updateItem(item.id, "clientName", toTitleCase(e.target.value))}
-                            onBlur={(e)   => handleBlurSave(item.id, "clientName", toTitleCase(e.target.value))}
-                            onKeyDown={(e) => handleKeyDown(e, item.id, "clientName")}
-                            className={cn(CELL_INPUT, "font-medium")}
-                            placeholder="Nom Prénom"
-                          />
-                        ) : (
-                          <div
-                            onClick={() => startEdit(item.id, "clientName", item.clientName)}
-                            className={cn(
-                              "w-full h-8 px-2.5 text-[13px] rounded-lg cursor-text font-medium",
-                              "flex items-center hover:bg-black/[0.03] transition-colors duration-100 select-none truncate",
-                              item.clientName ? "text-slate-800" : EMPTY_CLS,
-                            )}
-                          >
-                            {item.clientName || "Nom Prénom"}
-                          </div>
-                        )}
+                        <ClientNameCell
+                          value={item.clientName}
+                          clientId={item.clientId ?? null}
+                          isEditing={isEditingCell(item.id, "clientName")}
+                          onStartEdit={() => startEdit(item.id, "clientName", item.clientName)}
+                          onChange={(v) => updateItem(item.id, "clientName", v)}
+                          onBlurSave={(v) => handleBlurSave(item.id, "clientName", toTitleCase(v))}
+                          onKeyDown={(e) => handleKeyDown(e, item.id, "clientName")}
+                          onSelectClient={(client) => {
+                            // Save both clientName and clientId atomically
+                            onItemsChange?.(
+                              items.map((it) =>
+                                it.id === item.id
+                                  ? { ...it, clientName: client.nom, clientId: client.id }
+                                  : it
+                              )
+                            );
+                            persist(item.id, { clientName: client.nom, clientId: client.id });
+                            setEditing(null);
+                          }}
+                        />
                       </div>
 
                       {/* 4 · Secteur (feature 7 — juste après Client) */}
