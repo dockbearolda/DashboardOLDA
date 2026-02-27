@@ -362,7 +362,7 @@ export function PlanningTable({ items, onItemsChange }: PlanningTableProps) {
       <div className="flex items-center px-4 py-2 border-b border-slate-100">
         <button
           onClick={addRow}
-          className="flex items-center justify-center w-6 h-6 rounded-md text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-all duration-150"
+          className="flex items-center justify-center w-6 h-6 rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-all duration-150"
           aria-label="Ajouter une ligne"
         >
           <Plus className="h-4 w-4" />
