@@ -161,7 +161,7 @@ const TABS: { key: TabKey; label: string; secteur: string | null }[] = [
 // Grip | Type | Priorité | Client | Secteur | Famille | Qté | Note | Échéance | État | Interne | ×
 
 const GRID_COLS =
-  "32px 76px 94px 175px 158px 142px 64px minmax(110px,1fr) 132px 172px 108px 40px";
+  "32px 76px 94px 175px 158px 142px 64px minmax(110px,1fr) 150px 172px 108px 40px";
 const GRID_STYLE: CSSProperties = { gridTemplateColumns: GRID_COLS };
 
 const COL_HEADERS = [
@@ -190,17 +190,40 @@ const CELL_WRAP  = "h-full flex items-center px-1.5 overflow-hidden min-w-0";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-function isUrgent(deadline: string | null): boolean {
-  if (!deadline) return false;
-  return (new Date(deadline).getTime() - Date.now()) / 86_400_000 <= 1;
+/** Parse "YYYY-MM-DD" or "YYYY-MM-DDTHH:…" sans conversion UTC */
+function parseISODate(date: string): { year: number; month: number; day: number } | null {
+  const iso   = date.split("T")[0];
+  const parts = iso.split("-");
+  if (parts.length < 3) return null;
+  const year  = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10);
+  const day   = parseInt(parts[2], 10);
+  if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+  return { year, month, day };
 }
 
+/** Nombre de jours jusqu'à l'échéance (négatif si dépassée), sans décalage UTC */
+function daysUntil(deadline: string | null): number | null {
+  if (!deadline) return null;
+  const parsed = parseISODate(deadline);
+  if (!parsed) return null;
+  const now      = new Date();
+  const today    = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const target   = new Date(parsed.year, parsed.month - 1, parsed.day).getTime();
+  return Math.round((target - today) / 86_400_000);
+}
+
+function isUrgent(deadline: string | null): boolean {
+  const d = daysUntil(deadline);
+  return d !== null && d <= 1;
+}
+
+/** Affiche "DD/MM" sans passer par UTC — corrige le bug "jour -1" en UTC+x */
 function formatDDMM(date: string | null): string {
   if (!date) return "";
-  const d = new Date(date);
-  return isNaN(d.getTime())
-    ? ""
-    : d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+  const parsed = parseISODate(date);
+  if (!parsed) return "";
+  return `${String(parsed.day).padStart(2, "0")}/${String(parsed.month).padStart(2, "0")}`;
 }
 
 function parseDDMM(text: string): string | null {
@@ -215,13 +238,17 @@ function parseDDMM(text: string): string | null {
     year = parseInt(parts[2], 10);
     if (year < 100) year += 2000;
   } else {
-    year = new Date().getFullYear();
-    const candidate = new Date(year, month - 1, day);
-    if (candidate < new Date()) year++;
+    const now   = new Date();
+    year        = now.getFullYear();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (new Date(year, month - 1, day) < today) year++;
   }
-  const d = new Date(year, month - 1, day);
-  if (isNaN(d.getTime())) return null;
-  return d.toISOString().split("T")[0];
+  // Validation (ex: 31/02 → mois incorrect)
+  const check = new Date(year, month - 1, day);
+  if (isNaN(check.getTime()) || check.getMonth() !== month - 1) return null;
+  // Format YYYY-MM-DD sans toISOString() pour éviter le décalage UTC
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${year}-${pad(month)}-${pad(day)}`;
 }
 
 function toTitleCase(s: string): string {
@@ -418,6 +445,14 @@ function AppleSelect({
   );
 }
 
+// Jours restants — chip coloré (feature « jours restants »)
+function DaysChip({ days }: { days: number }) {
+  if (days === 0)  return <span className="shrink-0 px-1.5 py-px rounded-full text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-100">auj.</span>;
+  if (days === 1)  return <span className="shrink-0 px-1.5 py-px rounded-full text-[10px] font-bold bg-orange-50 text-orange-600 border border-orange-100">dem.</span>;
+  if (days > 0)    return <span className="shrink-0 px-1.5 py-px rounded-full text-[10px] font-semibold bg-blue-50 text-blue-500 border border-blue-100">+{days}j</span>;
+  /* dépassée */   return <span className="shrink-0 px-1.5 py-px rounded-full text-[10px] font-bold bg-red-50 text-red-500 border border-red-100">{days}j</span>;
+}
+
 // Hybrid date input — text JJ/MM + calendar icon (feature 6)
 function HybridDateInput({
   value, onChange, urgent,
@@ -426,8 +461,9 @@ function HybridDateInput({
   onChange: (v: string | null) => void;
   urgent:   boolean;
 }) {
-  const [text, setText]   = useState(formatDDMM(value));
-  const hiddenRef         = useRef<HTMLInputElement>(null);
+  const [text, setText]     = useState(formatDDMM(value));
+  const [focused, setFocus] = useState(false);
+  const hiddenRef           = useRef<HTMLInputElement>(null);
 
   // Sync text when external value changes
   useEffect(() => { setText(formatDDMM(value)); }, [value]);
@@ -435,7 +471,7 @@ function HybridDateInput({
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
     setText(raw);
-    // Auto-parse when length matches DD/MM (5 chars)
+    // Auto-parse dès que le format DD/MM est complet
     if (raw.length >= 5) {
       const parsed = parseDDMM(raw);
       if (parsed) onChange(parsed);
@@ -443,6 +479,7 @@ function HybridDateInput({
   };
 
   const handleTextBlur = () => {
+    setFocus(false);
     if (!text.trim()) { onChange(null); setText(""); return; }
     const parsed = parseDDMM(text);
     if (parsed) { onChange(parsed); setText(formatDDMM(parsed)); }
@@ -450,21 +487,24 @@ function HybridDateInput({
   };
 
   const openCalendar = () => {
-    try      { hiddenRef.current?.showPicker(); }
-    catch    { hiddenRef.current?.click();      }
+    try   { hiddenRef.current?.showPicker(); }
+    catch { hiddenRef.current?.click();      }
   };
 
+  const days = daysUntil(value);
+
   return (
-    <div className="flex items-center w-full">
+    <div className="flex items-center gap-1 w-full">
       <input
         type="text"
         value={text}
         onChange={handleTextChange}
+        onFocus={() => setFocus(true)}
         onBlur={handleTextBlur}
         placeholder="JJ/MM"
         maxLength={10}
         className={cn(
-          "flex-1 min-w-0 h-8 px-2.5 text-[13px] rounded-lg border bg-transparent",
+          "w-[54px] shrink-0 h-8 px-2 text-[13px] rounded-lg border bg-transparent",
           "focus:outline-none focus:ring-2 focus:border-blue-300 focus:ring-blue-100/70 focus:bg-white",
           "transition-all duration-100 tabular-nums",
           urgent
@@ -474,9 +514,13 @@ function HybridDateInput({
               : cn(EMPTY_CLS, "border-transparent hover:border-slate-200"),
         )}
       />
+      {/* Jours restants — visible quand non focalisé et date définie */}
+      {!focused && days !== null && (
+        <DaysChip days={days} />
+      )}
       <button
         onClick={openCalendar}
-        className="flex-shrink-0 p-1.5 rounded-md text-slate-300 hover:text-blue-400 hover:bg-blue-50 transition-colors duration-100"
+        className="ml-auto shrink-0 p-1 rounded-md text-slate-300 hover:text-blue-400 hover:bg-blue-50 transition-colors duration-100"
         title="Ouvrir le calendrier"
         type="button"
       >
