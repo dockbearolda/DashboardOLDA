@@ -150,8 +150,9 @@ model DtfRow {
 model UserProfile {
   id               String   @id @default(cuid())
   userId           String   @unique // "loic" | "charlie" | "melina" | "amandine"
-  profilePhotoLink String?
+  profilePhotoLink String?           // URL https://… ou "emoji:🦁"
   mood             String   @default("")
+  cardColor        String   @default("") // preset: "blue" | "purple" | "teal" | etc.
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

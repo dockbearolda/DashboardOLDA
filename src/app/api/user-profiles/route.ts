@@ -8,16 +8,16 @@ export async function GET() {
   try {
     for (const userId of PEOPLE) {
       await prisma.$executeRaw`
-        INSERT INTO user_profiles (id, "userId", "profilePhotoLink", mood, "createdAt", "updatedAt")
-        VALUES (${`profile_${userId}`}, ${userId}, NULL, '', NOW(), NOW())
+        INSERT INTO user_profiles (id, "userId", "profilePhotoLink", mood, "cardColor", "createdAt", "updatedAt")
+        VALUES (${`profile_${userId}`}, ${userId}, NULL, '', '', NOW(), NOW())
         ON CONFLICT ("userId") DO NOTHING
       `;
     }
 
     const profiles = await prisma.$queryRaw<
-      { userId: string; profilePhotoLink: string | null; mood: string }[]
+      { userId: string; profilePhotoLink: string | null; mood: string; cardColor: string }[]
     >`
-      SELECT "userId", "profilePhotoLink", mood
+      SELECT "userId", "profilePhotoLink", mood, "cardColor"
       FROM user_profiles
       WHERE "userId" = ANY(ARRAY['loic','charlie','melina','amandine'])
     `;
@@ -29,16 +29,17 @@ export async function GET() {
   }
 }
 
-// PATCH /api/user-profiles — upsert mood or photo for a given user
+// PATCH /api/user-profiles — upsert mood, photo, or cardColor for a given user
 export async function PATCH(req: Request) {
   try {
     const body = await req.json() as {
       userId: string;
       mood?: string;
       profilePhotoLink?: string | null;
+      cardColor?: string;
     };
 
-    const { userId, mood, profilePhotoLink } = body;
+    const { userId, mood, profilePhotoLink, cardColor } = body;
 
     if (!PEOPLE.includes(userId as typeof PEOPLE[number])) {
       return NextResponse.json({ error: "Invalid userId" }, { status: 400 });
@@ -51,10 +52,12 @@ export async function PATCH(req: Request) {
         userId,
         mood: mood ?? "",
         profilePhotoLink: profilePhotoLink ?? null,
+        cardColor: cardColor ?? "",
       },
       update: {
-        ...(mood !== undefined ? { mood } : {}),
+        ...(mood !== undefined          ? { mood }             : {}),
         ...(profilePhotoLink !== undefined ? { profilePhotoLink } : {}),
+        ...(cardColor !== undefined     ? { cardColor }        : {}),
       },
     });
 
