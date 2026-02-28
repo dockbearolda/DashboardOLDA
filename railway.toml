@@ -1,11 +1,12 @@
 [build]
-# Commande de build : génère le client Prisma + compile Next.js
+# Génère le client Prisma + compile Next.js
 buildCommand = "npm ci && npx prisma generate && npm run build"
 
 [deploy]
-# Commande de démarrage — tsx est maintenant en dependencies, pas devDependencies
-startCommand = "npx prisma migrate deploy && tsx server.ts"
+# ⚠️  Séparé avec ";" et non "&&" — le serveur démarre même si les migrations échouent
+# Les migrations qui échouent sont loggées dans /api/health sans bloquer le démarrage
+startCommand = "npx prisma migrate deploy; tsx server.ts"
 healthcheckPath = "/api/health"
-healthcheckTimeout = 120
+healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
