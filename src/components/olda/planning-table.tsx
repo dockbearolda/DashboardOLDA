@@ -172,10 +172,10 @@ const TABS: { key: TabKey; label: string; secteur: string | null }[] = [
 
 // ── Grid layout (11 columns) ────────────────────────────────────────────────────
 // Grip | Type | Priorité | Client | Secteur | Qté | Note | Échéance | État | Interne | ×
-// Client prend le 1fr → absorbe l'espace disponible selon la largeur d'écran
+// Note prend le 1fr → toutes les notes visibles ; Client capé à 190px
 
 const GRID_COLS =
-  "32px 76px 94px minmax(140px,1fr) 150px 56px minmax(90px,160px) 160px 168px 100px 40px";
+  "32px 76px 94px minmax(100px,190px) 155px 56px minmax(108px,1fr) 165px 168px 100px 40px";
 const GRID_STYLE: CSSProperties = { gridTemplateColumns: GRID_COLS };
 
 const COL_HEADERS: Array<{ label: string; align: string; sortKey?: SortableCol }> = [
