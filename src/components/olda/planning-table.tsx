@@ -1034,7 +1034,7 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
 
           {/* Rows */}
           <Reorder.Group as="div" axis="y" values={displayItems} onReorder={handleReorder}>
-            <AnimatePresence mode="popLayout" initial={false}>
+            <AnimatePresence initial={false}>
               {displayItems.map((item) => {
                 if (!item?.id) return null;
                 const isDeleting  = deletingIds.has(item.id);
@@ -1049,10 +1049,10 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
                 return (
                   <Reorder.Item key={item.id} value={item} as="div">
                     <motion.div
-                      initial={{ opacity: 0, y: -4 }}
-                      animate={{ opacity: isDeleting ? 0.25 : 1, y: 0 }}
-                      exit={{ opacity: 0, x: 24, transition: { duration: 0.15 } }}
-                      transition={{ type: "spring", stiffness: 500, damping: 42 }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: isDeleting ? 0.25 : 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.1, ease: "easeOut" }}
                       className={cn(
                         "grid w-full border-b border-slate-100 group relative",
                         "transition-colors duration-100",
