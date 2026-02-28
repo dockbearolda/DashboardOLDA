@@ -162,9 +162,10 @@ const TABS: { key: TabKey; label: string; secteur: string | null }[] = [
 
 // ── Grid layout (11 columns) ────────────────────────────────────────────────────
 // Grip | Type | Priorité | Client | Secteur | Qté | Note | Échéance | État | Interne | ×
+// Client prend le 1fr → absorbe l'espace disponible selon la largeur d'écran
 
 const GRID_COLS =
-  "32px 76px 94px 175px 158px 64px minmax(78px,1fr) 165px 172px 108px 40px";
+  "32px 76px 90px minmax(140px,1fr) 148px 60px 108px 150px 160px 92px 40px";
 const GRID_STYLE: CSSProperties = { gridTemplateColumns: GRID_COLS };
 
 const COL_HEADERS = [
@@ -852,7 +853,7 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
 
       {/* ── Table ───────────────────────────────────────────────────────────── */}
       <div className="overflow-x-auto">
-        <div style={{ minWidth: "1200px" }}>
+        <div style={{ minWidth: "1050px" }}>
 
           {/* Column headers */}
           <div className="grid bg-slate-50/70 border-b border-slate-100" style={GRID_STYLE}>
