@@ -1024,7 +1024,7 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
                 key={i}
                 className={cn(
                   "px-1.5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400",
-                  align === "center" ? "flex items-center justify-center" : align === "right" ? "text-right" : "",
+                  align === "center" ? "flex items-center justify-center" : "",
                 )}
               >
                 {label}
