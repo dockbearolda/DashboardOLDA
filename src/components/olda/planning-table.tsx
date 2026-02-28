@@ -268,12 +268,13 @@ function toTitleCase(s: string): string {
 // ── Sub-components ──────────────────────────────────────────────────────────────
 
 // Search bar glassmorphism (feature 1)
-function SearchBar({ value, onChange, maxWidth }: { value: string; onChange: (v: string) => void; maxWidth?: string }) {
+function SearchBar({ value, onChange, maxWidth, className }: { value: string; onChange: (v: string) => void; maxWidth?: string; className?: string }) {
   return (
     <div
       style={{ maxWidth }}
       className={cn(
         "flex items-center gap-2.5 h-9 px-3.5 rounded-xl w-full",
+        className,
         "bg-white/60 backdrop-blur-md border border-slate-200/80 shadow-sm",
         "transition-[background-color,border-color,box-shadow] duration-200",
         "focus-within:bg-white focus-within:border-blue-200 focus-within:shadow-blue-50",
@@ -432,6 +433,51 @@ function AppleSelect({
         onChange={(e) => onChange(e.target.value)}
       >
         {children}
+      </select>
+    </div>
+  );
+}
+
+// Status config — point coloré par état
+const STATUS_CONFIG: Record<PlanningStatus, string> = {
+  A_DEVISER:           "bg-slate-300",
+  ATTENTE_VALIDATION:  "bg-amber-400",
+  MAQUETTE_A_FAIRE:    "bg-purple-400",
+  ATTENTE_MARCHANDISE: "bg-orange-400",
+  A_PREPARER:          "bg-blue-400",
+  A_PRODUIRE:          "bg-blue-500",
+  EN_PRODUCTION:       "bg-indigo-500",
+  A_MONTER_NETTOYER:   "bg-cyan-500",
+  MANQUE_INFORMATION:  "bg-red-400",
+  TERMINE:             "bg-green-500",
+  PREVENIR_CLIENT:     "bg-yellow-500",
+  CLIENT_PREVENU:      "bg-yellow-400",
+  RELANCE_CLIENT:      "bg-orange-500",
+  PRODUIT_RECUPERE:    "bg-teal-500",
+  A_FACTURER:          "bg-emerald-500",
+  FACTURE_FAITE:       "bg-green-600",
+};
+
+function StatusPicker({ value, onChange }: { value: PlanningStatus; onChange: (v: PlanningStatus) => void }) {
+  return (
+    <div className="relative w-full">
+      <div className={cn(
+        "flex items-center h-8 gap-2 px-2.5 rounded-lg border text-[12px]",
+        "border-slate-100 bg-white/50 text-slate-800",
+        "hover:bg-white hover:border-slate-200 cursor-pointer transition-[background-color,border-color] duration-[80ms]",
+      )}>
+        <span className={cn("shrink-0 w-1.5 h-1.5 rounded-full", STATUS_CONFIG[value] ?? "bg-slate-300")} />
+        <span className="truncate flex-1 font-medium">{STATUS_LABELS[value]}</span>
+        <ChevronDown className="h-3 w-3 text-slate-400 shrink-0" />
+      </div>
+      <select
+        className="absolute inset-0 opacity-0 cursor-pointer w-full"
+        value={value}
+        onChange={(e) => onChange(e.target.value as PlanningStatus)}
+      >
+        {Object.entries(STATUS_LABELS).map(([key, label]) => (
+          <option key={key} value={key}>{label}</option>
+        ))}
       </select>
     </div>
   );
@@ -991,21 +1037,22 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
 
   return (
     <div
-      className="flex flex-col rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden"
+      className="flex flex-col rounded-2xl bg-white overflow-hidden"
       style={{
         fontFamily:          "'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif",
         WebkitFontSmoothing: "antialiased",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.05)",
       }}
     >
 
-      {/* ── Toolbar ────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 bg-white">
+      {/* ── Toolbar unifiée ─────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-black/[0.06] bg-white/80 backdrop-blur-sm">
         <button
           onClick={addRow}
           className={cn(
-            "flex items-center gap-1.5 h-8 px-3 rounded-lg text-[13px] font-medium",
+            "flex items-center gap-1.5 h-8 px-3 rounded-lg text-[13px] font-semibold shrink-0",
             "bg-blue-500 text-white hover:bg-blue-600 active:scale-95",
-            "transition-[background-color,transform] duration-150 shadow-sm shadow-blue-200 shrink-0",
+            "transition-[background-color,transform] duration-[80ms] shadow-sm shadow-blue-200/60",
           )}
           aria-label="Ajouter une ligne"
         >
@@ -1013,15 +1060,18 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
           <span>Ajouter</span>
         </button>
 
+        <div className="h-4 w-px bg-slate-200 shrink-0" />
 
-        {/* Filtre par personne */}
+        <SearchBar value={search} onChange={setSearch} className="flex-1 min-w-0" />
+
+        {/* Filtre personne actif */}
         {filterPerson && (
           <button
             onClick={() => setFilterPerson("")}
             className={cn(
-              "flex items-center gap-1.5 h-7 px-2.5 rounded-full text-[11px] font-semibold",
+              "flex items-center gap-1.5 h-7 px-2.5 rounded-full text-[11px] font-semibold shrink-0",
               "bg-blue-50 text-blue-600 border border-blue-200",
-              "hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors duration-150",
+              "hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors duration-[80ms]",
             )}
           >
             {TEAM.find((p) => p.key === filterPerson)?.name}
@@ -1030,14 +1080,9 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
         )}
       </div>
 
-      {/* ── Search bar ────────────────────────────────────────────────── */}
-      <div className="px-4 py-2.5 border-b border-slate-100 bg-white">
-        <SearchBar value={search} onChange={setSearch} maxWidth="18%" />
-      </div>
-
-      {/* ── Tabs (feature 8) ────────────────────────────────────────────────── */}
-      <div className="border-b border-slate-100 bg-slate-50/50 overflow-x-auto">
-        <div className="flex justify-start items-end gap-1 px-4 min-w-max">
+      {/* ── Tabs ─────────────────────────────────────────────────────────────── */}
+      <div className="border-b border-black/[0.06] bg-white overflow-x-auto">
+        <div className="flex justify-start items-stretch gap-0 px-4 min-w-max">
           {TABS.map((tab) => {
             const active = activeTab === tab.key;
             const count  = tabCounts[tab.key];
@@ -1046,22 +1091,29 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 text-[13px] font-medium",
-                  "whitespace-nowrap transition-colors duration-150 rounded-t-lg",
-                  "border border-b-0",
+                  "relative flex items-center gap-1.5 px-4 py-2.5 text-[13px]",
+                  "whitespace-nowrap transition-[color] duration-[80ms]",
                   active
-                    ? "text-blue-600 bg-white border-slate-200 shadow-sm"
-                    : "text-slate-500 border-transparent hover:text-slate-700 hover:bg-slate-100/60",
+                    ? "text-blue-600 font-semibold"
+                    : "text-slate-500 font-medium hover:text-slate-800",
                 )}
               >
                 {tab.label}
                 {count > 0 && (
                   <span className={cn(
-                    "px-1.5 py-0.5 rounded-full text-[11px] font-semibold",
-                    active ? "bg-blue-100 text-blue-600" : "bg-slate-200 text-slate-500",
+                    "px-1.5 py-0.5 rounded-full text-[11px] font-semibold transition-[background-color,color] duration-[80ms]",
+                    active ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-400",
                   )}>
                     {count}
                   </span>
+                )}
+                {/* Trait bleu animé en bas de l'onglet actif */}
+                {active && (
+                  <motion.div
+                    layoutId="tab-active-line"
+                    className="absolute bottom-0 left-2 right-2 h-[2px] bg-blue-500 rounded-t-full"
+                    transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                  />
                 )}
               </button>
             );
@@ -1074,7 +1126,7 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
         <div style={{ minWidth: "1200px" }}>
 
           {/* Column headers */}
-          <div className="grid bg-slate-50/70 border-b border-slate-100 border-l-4 border-l-transparent" style={GRID_STYLE}>
+          <div className="grid bg-[#f9f9fb] border-b border-black/[0.04] border-l-4 border-l-transparent" style={GRID_STYLE}>
             {COL_HEADERS.map(({ label, align }, i) => (
               <div
                 key={i}
@@ -1102,8 +1154,8 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
                 const itemType    = (types[item.id] ?? "") as ItemType;
                 const typeConfig  = TYPE_CONFIG[itemType] ?? TYPE_CONFIG[""];
                 const rowBg = urgent
-                  ? "bg-red-50 hover:bg-red-100/40"
-                  : "bg-white hover:bg-slate-50/70";
+                  ? "bg-red-50/70 hover:bg-red-50"
+                  : "bg-white hover:bg-[#f5f5f7]/60";
                 const isDragging = dragId === item.id;
                 const isTarget   = dropTarget?.id === item.id;
 
@@ -1148,10 +1200,10 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
                     </AnimatePresence>
                     <div
                       className={cn(
-                        "grid w-full border-b border-slate-100 group relative",
-                        "transition-colors duration-100",
+                        "grid w-full border-b border-black/[0.04] group relative",
+                        "transition-colors duration-[80ms]",
                         "border-l-4", typeConfig.border,
-                        "min-h-[44px]",
+                        "min-h-[52px]",
                         rowBg,
                         isDeleting && "pointer-events-none",
                       )}
@@ -1164,7 +1216,7 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
 
                       {/* Save indicator — CSS pur, aucun JS d'animation */}
                       {isSaving && (
-                        <span className="absolute left-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse z-10 pointer-events-none" />
+                        <span className="absolute left-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse z-10 pointer-events-none" />
                       )}
 
                       {/* 0 · Grip */}
@@ -1298,15 +1350,10 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
 
                       {/* 8 · État */}
                       <div className={CELL_WRAP}>
-                        <AppleSelect
+                        <StatusPicker
                           value={item.status}
-                          displayLabel={STATUS_LABELS[item.status]}
-                          onChange={(v) => saveNow(item.id, "status", v as PlanningStatus)}
-                        >
-                          {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                            <option key={key} value={key}>{label}</option>
-                          ))}
-                        </AppleSelect>
+                          onChange={(v) => saveNow(item.id, "status", v)}
+                        />
                       </div>
 
                       {/* 9 · Interne — clic droit sur le nom = filtre rapide */}

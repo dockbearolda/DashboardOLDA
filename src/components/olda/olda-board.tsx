@@ -743,12 +743,12 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
 
   return (
     <div
-      className="flex flex-col h-svh w-full overflow-hidden bg-white"
+      className="flex flex-col h-svh w-full overflow-hidden bg-[#f5f5f7]"
       style={{ fontFamily: "'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" }}
     >
 
       {/* ── Header : tabs centrés · user à gauche · indicateur live à droite ─ */}
-      <div className="shrink-0 px-4 sm:px-6 pt-5 pb-3 relative flex items-center justify-center border-b border-gray-100">
+      <div className="shrink-0 px-4 sm:px-6 pt-5 pb-3 relative flex items-center justify-center border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
         {/* Tabs — centrés */}
         <div className="flex items-center gap-3">
           <div className="flex gap-1 p-1 rounded-xl bg-gray-100/80 overflow-x-auto">
@@ -806,7 +806,7 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
       </div>
 
       {/* ── Contenu principal ───────────────────────────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-0">
 
         {/* ══ VUE FLUX — 4 cartes collaborateurs ══════════════════════════════ */}
         <div className={cn(viewTab !== 'flux' && 'hidden')}>
