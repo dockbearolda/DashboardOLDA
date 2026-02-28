@@ -443,7 +443,6 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
     if (!res.ok) return;
     const { order } = await res.json();
     setOrders((prev) => [order, ...prev]);
-    setViewTab("commandes");
   };
 
   // ── Session temporelle ────────────────────────────────────────────────────
