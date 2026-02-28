@@ -157,6 +157,18 @@ model UserProfile {
   @@map("user_profiles")
 }
 
+// ── Onglet Team — Notes & humeur par collaborateur ────────────────────────────
+model TeamNote {
+  id        String   @id @default(cuid())
+  person    String   @unique // "loic" | "melina" | "amandine" | "renaud"
+  note      String   @default("")
+  mood      String   @default("")
+  updatedBy String   @default("")
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("team_notes")
+}
+
 model Client {
   id            String         @id @default(cuid())
   nom           String
