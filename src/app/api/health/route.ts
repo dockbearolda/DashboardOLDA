@@ -1,30 +1,34 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+/**
+ * GET /api/health
+ *
+ * Railway health check — doit TOUJOURS retourner HTTP 200 si le serveur est vivant.
+ * L'état de la base de données est retourné dans le body JSON, pas via le code HTTP.
+ * Retourner 503 ici bloquerait Railway en "Creating containers" indéfiniment.
+ */
 export async function GET() {
   const dbUrl = process.env.DATABASE_URL;
 
-  // Check if DATABASE_URL is set
+  // Serveur vivant mais DB non configurée
   if (!dbUrl) {
-    return NextResponse.json(
-      {
-        status: "error",
-        problem: "DATABASE_URL is not set",
-        fix: "Go to Railway → Your Next.js service → Variables → Add DATABASE_URL referencing your PostgreSQL service",
-      },
-      { status: 503 }
-    );
+    return NextResponse.json({
+      status: "degraded",
+      server: "ok",
+      database: "not configured",
+      problem: "DATABASE_URL is not set",
+      fix: "Railway → Service Next.js → Variables → Add DATABASE_URL referencing your PostgreSQL service",
+    });
+    // HTTP 200 intentionnel — le serveur tourne, c'est ce que Railway vérifie
   }
 
-  // Mask the URL for safe display
   const masked = dbUrl.replace(/:\/\/([^:]+):([^@]+)@/, "://$1:***@");
 
-  // Try to query the DB
   try {
     await prisma.$queryRaw`SELECT 1`;
     const orderCount = await prisma.order.count();
 
-    // Introspect actual enum values in DB to detect schema drift
     const enumRows = await prisma.$queryRaw<{ typname: string; enumlabel: string }[]>`
       SELECT t.typname, e.enumlabel
       FROM pg_enum e
@@ -40,6 +44,7 @@ export async function GET() {
 
     return NextResponse.json({
       status: "ok",
+      server: "ok",
       database: "connected",
       databaseUrl: masked,
       orders: orderCount,
@@ -51,19 +56,19 @@ export async function GET() {
     const isTableMissing =
       message.includes("does not exist") || message.includes("relation");
 
-    return NextResponse.json(
-      {
-        status: "error",
-        database: "connection failed",
-        databaseUrl: masked,
-        problem: isTableMissing
-          ? "Tables not created — migrations have not run"
-          : message,
-        fix: isTableMissing
-          ? "The app should run 'prisma migrate deploy' on startup — check Railway deploy logs"
-          : "Check that DATABASE_URL points to the correct PostgreSQL service",
-      },
-      { status: 503 }
-    );
+    // HTTP 200 intentionnel — le serveur Node tourne.
+    // Si la DB n'est pas prête, Railway réessaiera automatiquement les requêtes.
+    return NextResponse.json({
+      status: "degraded",
+      server: "ok",
+      database: "connection failed",
+      databaseUrl: masked,
+      problem: isTableMissing
+        ? "Tables not created — migrations have not run yet"
+        : message,
+      fix: isTableMissing
+        ? "Run: npx prisma migrate deploy"
+        : "Check that DATABASE_URL points to the correct PostgreSQL service",
+    });
   }
 }
