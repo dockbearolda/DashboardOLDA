@@ -427,6 +427,11 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
   const [notes, setNotes]               = useState<Record<string, NoteData>>({});
   const [notesReady, setNotesReady]     = useState(false);
   const [viewTab, setViewTab] = useState<'flux' | 'commandes' | 'production_dtf' | 'workflow' | 'demande_prt' | 'planning' | 'clients_pro'>('flux');
+  // Badge de notification sur l'onglet Flux
+  const [fluxHasNotif, setFluxHasNotif] = useState(false);
+  // Ref pour connaître l'onglet courant dans les callbacks SSE (évite les stale closures)
+  const viewTabRef = useRef(viewTab);
+  useEffect(() => { viewTabRef.current = viewTab; }, [viewTab]);
   const [workflowItems, setWorkflowItems] = useState<WorkflowItem[]>([]);
   const [prtItems, setPrtItems] = useState<PRTItem[]>([]);
   const [allPrtItems, setAllPrtItems] = useState<PRTItem[]>([]);
@@ -670,6 +675,26 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
     if (viewTab === "clients_pro") fetchClients();
   }, [viewTab, fetchClients]);
 
+  // ── Notification badge Flux ────────────────────────────────────────────────
+  // Appelé depuis RemindersGrid quand une note SSE arrive.
+  // Si la note concerne l'utilisateur actif ET qu'il n'est pas sur l'onglet Flux
+  // → on allume le badge.
+  const sessionRef = useRef(session);
+  useEffect(() => { sessionRef.current = session; }, [session]);
+
+  const handleNoteChangedForNotif = useCallback((person: string) => {
+    if (!sessionRef.current) return;
+    if (person !== sessionRef.current.name) return;
+    if (viewTabRef.current === 'flux') return; // déjà visible → pas de badge
+    setFluxHasNotif(true);
+  }, []);
+
+  // Changement d'onglet : efface le badge quand l'utilisateur retourne sur Flux
+  const handleTabChange = useCallback((tab: typeof viewTab) => {
+    setViewTab(tab);
+    if (tab === 'flux') setFluxHasNotif(false);
+  }, []);
+
   // ── Connexion / Déconnexion ────────────────────────────────────────────────
   const handleLogin = useCallback((name: string) => {
     const s = saveSession(name);
@@ -730,9 +755,9 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
             {(['flux', 'commandes', 'demande_prt', 'production_dtf', 'workflow', 'planning', 'clients_pro'] as const).map((v) => (
               <button
                 key={v}
-                onClick={() => setViewTab(v)}
+                onClick={() => handleTabChange(v)}
                 className={cn(
-                  "px-3.5 py-1.5 rounded-[10px] text-[13px] font-semibold transition-all whitespace-nowrap",
+                  "relative px-3.5 py-1.5 rounded-[10px] text-[13px] font-semibold transition-all whitespace-nowrap",
                   "[touch-action:manipulation]",
                   viewTab === v
                     ? "bg-white text-gray-900 shadow-sm"
@@ -740,6 +765,9 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
                 )}
               >
                 {v === 'flux' ? 'Flux' : v === 'commandes' ? 'Commandes' : v === 'demande_prt' ? 'Demande de PRT' : v === 'production_dtf' ? 'Production' : v === 'workflow' ? 'Gestion d\'atelier' : v === 'planning' ? 'Planning' : 'Clients Pro'}
+                {v === 'flux' && fluxHasNotif && (
+                  <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-red-400 border border-white" />
+                )}
               </button>
             ))}
           </div>
@@ -782,7 +810,7 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
 
         {/* ══ VUE FLUX — 4 cartes collaborateurs ══════════════════════════════ */}
         <div className={cn(viewTab !== 'flux' && 'hidden')}>
-          <RemindersGrid key={String(notesReady)} notesMap={notesMap} activeUser={session.name} />
+          <RemindersGrid key={String(notesReady)} notesMap={notesMap} activeUser={session.name} onNoteChanged={handleNoteChangedForNotif} />
         </div>
 
         {/* ══ VUE COMMANDES — Kanban t-shirts uniquement ══════════════════════ */}

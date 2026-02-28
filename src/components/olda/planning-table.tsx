@@ -1018,14 +1018,13 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
         <div style={{ minWidth: "1200px" }}>
 
           {/* Column headers */}
-          <div className="grid bg-slate-50/70 border-b border-slate-100" style={GRID_STYLE}>
+          <div className="grid bg-slate-50/70 border-b border-slate-100 border-l-4 border-l-transparent" style={GRID_STYLE}>
             {COL_HEADERS.map(({ label, align }, i) => (
               <div
                 key={i}
                 className={cn(
                   "px-1.5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400",
-                  align === "center" && "text-center",
-                  (align as string) === "right" && "text-right",
+                  align === "center" ? "flex items-center justify-center" : align === "right" ? "text-right" : "",
                 )}
               >
                 {label}
@@ -1043,8 +1042,6 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
                 const urgent      = isUrgent(item.deadline);
                 const itemType    = (types[item.id] ?? "") as ItemType;
                 const typeConfig  = TYPE_CONFIG[itemType] ?? TYPE_CONFIG[""];
-                const isNoteEdit  = isEditingCell(item.id, "note");
-
                 const rowBg = urgent
                   ? "bg-red-50 hover:bg-red-100/40"
                   : "bg-white hover:bg-slate-50/70";
@@ -1180,15 +1177,23 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
                         )}
                       </div>
 
-                      {/* 6 · Note — multi-ligne → agrandit la ligne verticalement */}
-                      <div className="px-1.5 py-[13px] min-w-0 overflow-visible">
-                        <NoteCell
-                          note={item.note}
-                          isEditing={isNoteEdit}
-                          onStartEdit={() => startEdit(item.id, "note", item.note)}
-                          onUpdate={(v) => updateItem(item.id, "note", v)}
-                          onBlurSave={(v) => handleBlurSave(item.id, "note", v)}
-                          onCancel={() => { updateItem(item.id, "note", preEdit.current); setEditing(null); }}
+                      {/* 6 · Note — input toujours visible */}
+                      <div className={CELL_WRAP}>
+                        <input
+                          type="text"
+                          value={item.note}
+                          onChange={(e) => updateItem(item.id, "note", e.target.value)}
+                          onFocus={() => startEdit(item.id, "note", item.note)}
+                          onBlur={(e) => handleBlurSave(item.id, "note", e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, item.id, "note")}
+                          placeholder="Note…"
+                          className={cn(
+                            "w-full h-8 px-2 text-[12px] italic bg-transparent rounded-lg",
+                            "border border-transparent hover:border-slate-200",
+                            "focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100/70 focus:outline-none",
+                            "transition-all duration-100 placeholder:text-slate-300",
+                            item.note ? "text-slate-500" : "text-slate-300",
+                          )}
                         />
                       </div>
 

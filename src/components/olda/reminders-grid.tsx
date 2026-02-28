@@ -346,9 +346,12 @@ function ReminderCard({
 export function RemindersGrid({
   notesMap,
   activeUser,
+  onNoteChanged,
 }: {
-  notesMap:    Record<string, TodoItem[]>;
-  activeUser?: string;
+  notesMap:       Record<string, TodoItem[]>;
+  activeUser?:    string;
+  /** Appelé à chaque fois qu'une note SSE arrive — person = clé de la personne modifiée */
+  onNoteChanged?: (person: string) => void;
 }) {
   // State remonté pour les déplacements cross-card
   const [todosMap, setTodosMap] = useState<Record<string, TodoItem[]>>(() => {
@@ -357,10 +360,13 @@ export function RemindersGrid({
     return m;
   });
 
-  const saveTimers    = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const mountedRef    = useRef(true);
+  const saveTimers       = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const mountedRef       = useRef(true);
   // Clé de la personne dont une card est en cours d'édition (null = aucune)
-  const editingKeyRef = useRef<string | null>(null);
+  const editingKeyRef    = useRef<string | null>(null);
+  // Ref pour garder le callback toujours à jour sans relancer le SSE
+  const onNoteChangedRef = useRef(onNoteChanged);
+  useEffect(() => { onNoteChangedRef.current = onNoteChanged; }, [onNoteChanged]);
 
   // ── SSE : synchronisation temps réel entre utilisateurs ─────────────────────
   useEffect(() => {
@@ -380,6 +386,8 @@ export function RemindersGrid({
               person: string;
               todos:  TodoItem[] | string;
             };
+            // Notifier le parent (pour le badge d'onglet)
+            onNoteChangedRef.current?.(note.person);
             // Ne pas écraser la card en cours d'édition
             if (editingKeyRef.current === note.person) return;
             let todos: TodoItem[] = [];
