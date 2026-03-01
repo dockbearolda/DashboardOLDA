@@ -81,8 +81,9 @@ function WorkflowItemRow({
     <div className="group">
       <div
         className={cn(
-          "flex items-center gap-2 px-3 py-2.5 rounded-[14px] bg-white border border-gray-100",
-          "transition-all hover:border-gray-200 hover:shadow-sm select-none",
+          "flex items-center gap-2 px-4 py-3 rounded-[18px] bg-white border border-[#E5E5E5]",
+          "shadow-[0_1px_8px_rgba(0,0,0,0.05)] hover:shadow-[0_6px_24px_rgba(0,0,0,0.09)]",
+          "transition-all duration-200 select-none",
           isDeleting && "opacity-40 pointer-events-none"
         )}
       >

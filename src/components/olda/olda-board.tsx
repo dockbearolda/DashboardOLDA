@@ -21,6 +21,7 @@ import { DTFProductionTable } from "./dtf-production-table";
 import { WorkflowListsGrid } from "./workflow-list";
 import { PRTManager } from "./prt-manager";
 import { PlanningTable, type PlanningItem } from "./planning-table";
+import { ThemeSwitcher } from "./theme-switcher";
 
 interface PRTItem {
   id: string;
@@ -699,15 +700,15 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
 
   return (
     <div
-      className="flex flex-col h-svh w-full overflow-hidden bg-white"
+      className="flex flex-col h-svh w-full overflow-hidden bg-background"
       style={{ fontFamily: "'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" }}
     >
 
       {/* ── Header : tabs centrés · user à gauche · indicateur live à droite ─ */}
-      <div className="shrink-0 px-4 sm:px-6 pt-5 pb-3 relative flex items-center justify-center border-b border-gray-100">
+      <div className="shrink-0 px-4 sm:px-6 pt-5 pb-3 relative flex items-center justify-center border-b border-border">
         {/* Tabs — centrés */}
         <div className="flex items-center gap-3">
-          <div className="flex gap-1 p-1 rounded-xl bg-gray-100/80 overflow-x-auto">
+          <div className="flex gap-1 p-1 rounded-xl bg-muted/80 overflow-x-auto">
             {(['flux', 'commandes', 'demande_prt', 'production_dtf', 'workflow', 'planning'] as const).map((v) => (
               <button
                 key={v}
@@ -716,8 +717,8 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
                   "px-3.5 py-1.5 rounded-[10px] text-[13px] font-semibold transition-all whitespace-nowrap",
                   "[touch-action:manipulation]",
                   viewTab === v
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 {v === 'flux' ? 'Flux' : v === 'commandes' ? 'Commandes' : v === 'demande_prt' ? 'Demande de PRT' : v === 'production_dtf' ? 'Production' : v === 'workflow' ? 'Gestion d\'atelier' : 'Planning'}
@@ -728,7 +729,7 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
           {viewTab === 'commandes' && (
             <button
               onClick={addOrder}
-              className="flex items-center justify-center w-6 h-6 rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-all duration-150 shrink-0"
+              className="flex items-center justify-center w-6 h-6 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-150 shrink-0"
               aria-label="Ajouter une commande"
             >
               <Plus className="h-4 w-4" />
@@ -740,20 +741,21 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
           <button
             onClick={handleLogout}
             title="Se déconnecter"
-            className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gray-100/80 hover:bg-red-50 hover:border-red-100 border border-transparent transition-colors duration-150"
+            className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-muted/80 hover:bg-red-50 dark:hover:bg-red-950/40 hover:border-red-100 dark:hover:border-red-900/40 border border-transparent transition-colors duration-150"
           >
-            <span className="h-5 w-5 rounded-full bg-gray-800 flex items-center justify-center text-[10px] font-bold text-white leading-none select-none">
+            <span className="h-5 w-5 rounded-full bg-foreground/80 flex items-center justify-center text-[10px] font-bold text-background leading-none select-none">
               {(PERSON_DISPLAY.find(([k]) => k === session.name)?.[1] ?? session.name).charAt(0).toUpperCase()}
             </span>
-            <span className="text-[12px] font-semibold text-gray-600 group-hover:text-red-600 transition-colors duration-150 hidden sm:block">
+            <span className="text-[12px] font-semibold text-muted-foreground group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors duration-150 hidden sm:block">
               {PERSON_DISPLAY.find(([k]) => k === session.name)?.[1] ?? session.name}
             </span>
-            <LogOut className="h-3 w-3 text-gray-400 group-hover:text-red-500 transition-colors duration-150" />
+            <LogOut className="h-3 w-3 text-muted-foreground/60 group-hover:text-red-500 dark:group-hover:text-red-400 transition-colors duration-150" />
           </button>
         </div>
 
-        {/* Indicateur live — positionné à droite en absolu */}
-        <div className="absolute right-4 sm:right-6">
+        {/* ThemeSwitcher + Indicateur live — positionnés à droite en absolu */}
+        <div className="absolute right-4 sm:right-6 flex items-center gap-2">
+          <ThemeSwitcher />
           <LiveIndicator connected={sseConnected} />
         </div>
       </div>

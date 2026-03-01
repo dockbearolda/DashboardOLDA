@@ -140,31 +140,27 @@ export function DTFProductionTable({ activeUser }: DTFProductionTableProps) {
   return (
     <div className="flex flex-col gap-3 h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-2">
-          <h3 style={{ fontSize: 15, fontWeight: 600, color: "#1d1d1f" }}>
-            Production DTF
-          </h3>
-          {saving && <Loader2 className="h-3.5 w-3.5 text-gray-400 animate-spin" />}
-        </div>
-        <div className="flex items-center gap-2">
-          {rows.some((r) => r.status === "termine") && (
-            <button
-              onClick={deleteTerminated}
-              className="h-8 px-2.5 rounded-lg text-[12px] font-semibold text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-            >
-              Supprimer les terminés
-            </button>
-          )}
+      <div className="flex items-center gap-3 px-1">
+        <button
+          onClick={addRow}
+          disabled={saving}
+          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[13px] font-medium bg-blue-500 text-white hover:bg-blue-600 active:scale-95 transition-all duration-150 shadow-sm shadow-blue-200 shrink-0"
+        >
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+          <span>Ajouter une production</span>
+        </button>
+        <h3 style={{ fontSize: 15, fontWeight: 600, color: "#1d1d1f" }}>
+          Production DTF
+        </h3>
+        <div className="flex-1" />
+        {rows.some((r) => r.status === "termine") && (
           <button
-            onClick={addRow}
-            disabled={saving}
-            className="h-8 w-8 rounded-lg flex items-center justify-center bg-gray-100 hover:bg-blue-50 text-gray-600 hover:text-blue-600 transition-colors"
-            title="Ajouter une ligne"
+            onClick={deleteTerminated}
+            className="h-8 px-2.5 rounded-lg text-[12px] font-semibold text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
           >
-            <Plus className="h-4 w-4" />
+            Supprimer les terminés
           </button>
-        </div>
+        )}
       </div>
 
       {/* Table */}

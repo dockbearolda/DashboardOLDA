@@ -180,24 +180,18 @@ export function PRTManager({ items, onItemsChange }: PRTManagerProps) {
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between pb-3">
+      <div className="flex items-center gap-3 pb-3">
+        <button
+          onClick={handleAddNew}
+          disabled={isAddingNew}
+          className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[13px] font-medium bg-blue-500 text-white hover:bg-blue-600 active:scale-95 transition-all duration-150 shadow-sm shadow-blue-200 shrink-0"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          <span>Demande de DTF</span>
+        </button>
         <h2 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
           Demandes PRT
         </h2>
-        <motion.button
-          onClick={handleAddNew}
-          whileTap={{ scale: 0.92 }}
-          animate={isAddingNew ? { backgroundColor: "#10b981" } : { backgroundColor: "transparent" }}
-          className={cn(
-            "flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all",
-            isAddingNew
-              ? "text-white bg-green-500 shadow-md"
-              : "text-gray-600 hover:text-gray-900 hover:bg-gray-100 border border-gray-200"
-          )}
-        >
-          <Plus className="h-4 w-4" />
-          {isAddingNew ? "Ajouté ✓" : "Ajouter"}
-        </motion.button>
       </div>
 
       {/* Grid Header */}
