@@ -739,10 +739,9 @@ function ReminderCard({
               onDragStart={(e) => { if (editingId === todo.id) return; handleDragStart(e as unknown as React.DragEvent, todo); }}
               style={{ willChange: "transform, opacity" }}
               className={cn(
-                "flex items-center gap-3 w-full rounded-xl px-3 py-2.5 bg-white/75 border border-white/80",
-                "shadow-[0_1px_4px_rgba(0,0,0,0.06)] transition-colors duration-150",
+                "flex items-center gap-3 w-full rounded-xl px-3 py-2.5 transition-colors duration-150",
                 todo.done && "opacity-50",
-                editingId !== todo.id && "cursor-grab active:cursor-grabbing hover:bg-white/90 group",
+                editingId !== todo.id && "cursor-grab active:cursor-grabbing hover:bg-white/30 group",
               )}
             >
               <motion.button
