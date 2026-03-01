@@ -1,19 +1,17 @@
 "use client";
 
 /**
- * RemindersGrid — Gestures-first, Apple Reminders style, 4 inline cards.
+ * AchatCardsGrid — 3 cartes style Flux pour l'onglet Achat Textile.
+ * Carte 1 : Achat SXM · Carte 2 : Achat Europe · Carte 3 : Achat USA
  *
- * En-tête enrichi :
- *   · Avatar circulaire : sélection parmi ~24 icônes style SF Symbols (emoji)
- *     OU URL photo personnalisée
- *   · Couleur de carte : 9 palettes de dégradé style iOS
- *   · Mood picker (6 états emoji, dropdown animé)
- *   · Zone de note libre (debounce 900ms)
+ * Mêmes fonctionnalités que RemindersGrid :
+ *  • Todos (ajouter / cocher / supprimer / drag & drop entre cartes)
+ *  • Note libre (debounce 900 ms)
+ *  • Sélecteur avatar + couleur de carte
+ *  • Mood picker
  *
- * Interactions todo (inchangées) :
- *   • Clic simple → édition inline · double-clic → suppression
- *   • Drag & Drop natif entre les 4 cartes
- *   • Toggle ✓/⊘ · ajout rapide
+ * Données persistées sous les clés "achat_sxm" | "achat_europe" | "achat_usa"
+ * via les mêmes endpoints /api/notes et /api/user-profiles.
  */
 
 import { useState, useRef, useCallback, useEffect } from "react";
@@ -22,25 +20,24 @@ import { Plus, Trash2, Check, Link } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TodoItem } from "./person-note-modal";
 
-// ── Config équipe ───────────────────────────────────────────────────────────────
+// ── Zones d'achat ──────────────────────────────────────────────────────────────
 
-const PEOPLE = [
-  { key: "loic",     name: "Loïc",     initial: "L", defaultColor: "blue"   },
-  { key: "charlie",  name: "Charlie",  initial: "C", defaultColor: "pink"   },
-  { key: "melina",   name: "Mélina",   initial: "M", defaultColor: "purple" },
-  { key: "amandine", name: "Amandine", initial: "A", defaultColor: "gold"   },
+const ACHAT_ZONES = [
+  { key: "achat_sxm",    name: "Achat SXM",   initial: "S", defaultColor: "green"  },
+  { key: "achat_europe", name: "Achat Europe", initial: "E", defaultColor: "blue"   },
+  { key: "achat_usa",    name: "Achat USA",    initial: "U", defaultColor: "orange" },
 ] as const;
 
-type PersonKey = typeof PEOPLE[number]["key"];
+type ZoneKey = typeof ACHAT_ZONES[number]["key"];
 
-// ── Palettes de couleur (style iOS / macOS) ────────────────────────────────────
+// ── Palettes de couleur (identiques à reminders-grid) ─────────────────────────
 
 interface ColorPreset {
   key:    string;
   label:  string;
   from:   string;
   to:     string;
-  cardBg: string;     // classe Tailwind ou inline
+  cardBg: string;
   border: string;
 }
 
@@ -56,21 +53,18 @@ const COLOR_PRESETS: ColorPreset[] = [
   { key: "gold",   label: "Or",       from: "#ffd60a", to: "#b59300", cardBg: "#fffbe0",  border: "rgba(255,214,10,0.22)" },
 ];
 
-const DEFAULT_PRESET = COLOR_PRESETS[0]; // slate
+const DEFAULT_PRESET = COLOR_PRESETS[0];
 
 function getPreset(key: string): ColorPreset {
   return COLOR_PRESETS.find((p) => p.key === key) ?? DEFAULT_PRESET;
 }
 
-// ── Avatars style SF Symbols ────────────────────────────────────────────────────
+// ── Avatars ────────────────────────────────────────────────────────────────────
 
 const AVATAR_ICONS = [
-  // Animaux
-  "🦁", "🐯", "🦊", "🐻", "🦅", "🦋", "🐬", "🦄",
-  // Symboles / Tech
-  "⚡", "🌟", "🎯", "🎨", "🚀", "🌊", "🔥", "💎",
-  // Nature
-  "🌿", "🏔", "🌸", "🌙", "☀️", "❄️", "🍀", "🌺",
+  "🏝", "🌊", "🚢", "✈️", "🦅", "🗽", "🗼", "🏔",
+  "⚡", "🌟", "🎯", "🎨", "🚀", "🔥", "💎", "🌿",
+  "🛒", "📦", "🏷", "💼", "🌍", "🌎", "🌏", "🧭",
 ];
 
 // ── Moods ──────────────────────────────────────────────────────────────────────
@@ -90,7 +84,7 @@ function newId(): string {
   return `t${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-// ── Persistence helpers ────────────────────────────────────────────────────────
+// ── API helpers ────────────────────────────────────────────────────────────────
 
 function apiSaveTodos(key: string, todos: TodoItem[]) {
   fetch(`/api/notes/${key}`, {
@@ -120,7 +114,7 @@ function apiSaveProfile(userId: string, patch: {
   }).catch(() => {});
 }
 
-// ── AvatarDisplay ─────────────────────────────────────────────────────────────
+// ── AvatarDisplay ──────────────────────────────────────────────────────────────
 
 function AvatarDisplay({
   initial,
@@ -172,7 +166,7 @@ function AvatarDisplay({
   );
 }
 
-// ── AvatarPicker ──────────────────────────────────────────────────────────────
+// ── AvatarPicker ───────────────────────────────────────────────────────────────
 
 function AvatarPicker({
   initial,
@@ -195,7 +189,6 @@ function AvatarPicker({
   const preset = getPreset(cardColor);
   const ref    = useRef<HTMLDivElement>(null);
 
-  // Fermeture au clic extérieur — useRef pour éviter de recréer le listener à chaque render
   const onCloseRef = useRef(onClose);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
@@ -217,7 +210,6 @@ function AvatarPicker({
       className="absolute left-0 top-full mt-2 z-50 w-[248px] rounded-2xl bg-white border border-gray-100 p-3"
       style={{ boxShadow: "0 12px 36px rgba(0,0,0,0.13), 0 2px 6px rgba(0,0,0,0.06)" }}
     >
-      {/* Prévisualisation */}
       <div className="flex items-center gap-2.5 mb-3 p-2 rounded-xl bg-gray-50/70">
         <AvatarDisplay initial={initial} photoLink={photoLink} preset={preset} size={40} />
         <div>
@@ -226,14 +218,13 @@ function AvatarPicker({
         </div>
       </div>
 
-      {/* Section avatars */}
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 px-0.5">
         Avatar
       </p>
       <div className="grid grid-cols-8 gap-1 mb-3">
         {AVATAR_ICONS.map((icon) => {
-          const key     = `emoji:${icon}`;
-          const active  = photoLink === key;
+          const key    = `emoji:${icon}`;
+          const active = photoLink === key;
           return (
             <button
               key={icon}
@@ -241,15 +232,11 @@ function AvatarPicker({
               className={cn(
                 "flex items-center justify-center rounded-xl transition-all duration-100",
                 "text-[17px] leading-none",
-                active
-                  ? "scale-110 shadow-sm"
-                  : "hover:scale-110 hover:bg-gray-100"
+                active ? "scale-110 shadow-sm" : "hover:scale-110 hover:bg-gray-100"
               )}
               style={{
                 width: 26, height: 26,
-                background: active
-                  ? `linear-gradient(145deg, ${preset.from}, ${preset.to})`
-                  : undefined,
+                background: active ? `linear-gradient(145deg, ${preset.from}, ${preset.to})` : undefined,
               }}
               title={icon}
             >
@@ -259,7 +246,6 @@ function AvatarPicker({
         })}
       </div>
 
-      {/* Section couleur de carte */}
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 px-0.5">
         Couleur de la carte
       </p>
@@ -285,7 +271,6 @@ function AvatarPicker({
         })}
       </div>
 
-      {/* URL personnalisée */}
       <div className="border-t border-gray-100 pt-2.5 mt-0.5">
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 px-0.5 flex items-center gap-1">
           <Link className="h-2.5 w-2.5" /> URL personnalisée
@@ -394,59 +379,53 @@ function MoodButton({ current, onChange }: { current: string; onChange: (emoji: 
   );
 }
 
-// ── ReminderCard ───────────────────────────────────────────────────────────────
+// ── AchatCard ──────────────────────────────────────────────────────────────────
 
-function ReminderCard({
-  personKey,
-  personName,
-  personInitial,
+function AchatCard({
+  zoneKey,
+  zoneName,
+  zoneInitial,
   todos,
   note,
   mood,
   photoLink,
   cardColor,
-  isActive,
   onUpdate,
   onReceiveTodo,
-  onEditingChange,
   onMoodChange,
   onNoteChange,
   onPhotoChange,
   onColorChange,
 }: {
-  personKey:       PersonKey;
-  personName:      string;
-  personInitial:   string;
-  todos:           TodoItem[];
-  note:            string;
-  mood:            string;
-  photoLink:       string | null;
-  cardColor:       string;
-  isActive?:       boolean;
-  onUpdate:        (next: TodoItem[]) => void;
-  onReceiveTodo:   (fromKey: PersonKey, todoId: string) => void;
-  onEditingChange?:(isEditing: boolean) => void;
-  onMoodChange:    (emoji: string) => void;
-  onNoteChange:    (text: string) => void;
-  onPhotoChange:   (url: string | null) => void;
-  onColorChange:   (key: string) => void;
+  zoneKey:       ZoneKey;
+  zoneName:      string;
+  zoneInitial:   string;
+  todos:         TodoItem[];
+  note:          string;
+  mood:          string;
+  photoLink:     string | null;
+  cardColor:     string;
+  onUpdate:      (next: TodoItem[]) => void;
+  onReceiveTodo: (fromKey: ZoneKey, todoId: string) => void;
+  onMoodChange:  (emoji: string) => void;
+  onNoteChange:  (text: string) => void;
+  onPhotoChange: (url: string | null) => void;
+  onColorChange: (key: string) => void;
 }) {
   const preset = getPreset(cardColor);
 
-  // ── Todo UI state ────────────────────────────────────────────────────────────
   const [editingId,  setEditingId]  = useState<string | null>(null);
   const [editText,   setEditText]   = useState("");
   const [isAdding,   setIsAdding]   = useState(false);
   const [draft,      setDraft]      = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
 
-  // ── Profile UI state ─────────────────────────────────────────────────────────
-  const [showPicker,  setShowPicker]  = useState(false);
-  const [localNote,   setLocalNote]   = useState(note);
-  const [noteSaved,   setNoteSaved]   = useState(false);
-  const noteTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pickerAnchor  = useRef<HTMLDivElement>(null);
-  const textareaRef   = useRef<HTMLTextAreaElement>(null);
+  const [showPicker, setShowPicker] = useState(false);
+  const [localNote,  setLocalNote]  = useState(note);
+  const [noteSaved,  setNoteSaved]  = useState(false);
+  const noteTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pickerAnchor = useRef<HTMLDivElement>(null);
+  const textareaRef  = useRef<HTMLTextAreaElement>(null);
 
   const editInputRef = useRef<HTMLInputElement>(null);
   const addInputRef  = useRef<HTMLInputElement>(null);
@@ -454,7 +433,7 @@ function ReminderCard({
 
   useEffect(() => { setLocalNote(note); }, [note]);
 
-  // Auto-resize textarea — colle exactement au contenu, invisible quand vide
+  // Auto-resize — colle exactement au contenu, invisible quand vide
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -466,10 +445,6 @@ function ReminderCard({
     if (clickTimer.current) clearTimeout(clickTimer.current);
     if (noteTimer.current)  clearTimeout(noteTimer.current);
   }, []);
-
-  useEffect(() => { onEditingChange?.(editingId !== null || isAdding); }, [editingId, isAdding, onEditingChange]);
-
-  // ── Note ──────────────────────────────────────────────────────────────────────
 
   const handleNoteInput = useCallback((val: string) => {
     setLocalNote(val);
@@ -487,8 +462,6 @@ function ReminderCard({
     setNoteSaved(true);
     setTimeout(() => setNoteSaved(false), 1600);
   }, [localNote, onNoteChange]);
-
-  // ── Todos ─────────────────────────────────────────────────────────────────────
 
   const toggle = useCallback((id: string) => {
     onUpdate(todos.map(t => t.id === id ? { ...t, done: !t.done } : t));
@@ -531,12 +504,10 @@ function ReminderCard({
     }
   }, [draft, todos, onUpdate]);
 
-  // ── Drag & Drop ───────────────────────────────────────────────────────────────
-
   const handleDragStart = (e: React.DragEvent, todo: TodoItem) => {
     e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("rd_todoId",  todo.id);
-    e.dataTransfer.setData("rd_fromKey", personKey);
+    e.dataTransfer.setData("ac_todoId",  todo.id);
+    e.dataTransfer.setData("ac_fromKey", zoneKey);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -552,19 +523,15 @@ function ReminderCard({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    const todoId  = e.dataTransfer.getData("rd_todoId");
-    const fromKey = e.dataTransfer.getData("rd_fromKey") as PersonKey;
-    if (todoId && fromKey && fromKey !== personKey) onReceiveTodo(fromKey, todoId);
+    const todoId  = e.dataTransfer.getData("ac_todoId");
+    const fromKey = e.dataTransfer.getData("ac_fromKey") as ZoneKey;
+    if (todoId && fromKey && fromKey !== zoneKey) onReceiveTodo(fromKey, todoId);
   };
-
-  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div
       className={cn(
-        "rounded-3xl border p-4 flex flex-col gap-0",
-        "transition-all duration-300",
-        isActive   ? "shadow-md" : "",
+        "rounded-3xl border p-4 flex flex-col gap-0 transition-all duration-300",
         isDragOver ? "shadow-md" : ""
       )}
       onDragOver={handleDragOver}
@@ -574,22 +541,15 @@ function ReminderCard({
         fontFamily: "'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
         WebkitFontSmoothing: "antialiased",
         backgroundColor: preset.cardBg,
-        borderColor: isActive
-          ? preset.from + "55"
-          : isDragOver
-            ? preset.from + "44"
-            : preset.border,
-        boxShadow: isActive
-          ? `0 2px 12px 0 ${preset.from}22, 0 0 0 1px ${preset.from}33`
-          : isDragOver
-            ? `0 2px 10px 0 ${preset.from}18`
-            : `0 1px 4px 0 rgba(0,0,0,0.05)`,
+        borderColor: isDragOver ? preset.from + "44" : preset.border,
+        boxShadow: isDragOver
+          ? `0 2px 10px 0 ${preset.from}18`
+          : `0 1px 4px 0 rgba(0,0,0,0.05)`,
       }}
     >
-      {/* ── En-tête ──────────────────────────────────────────────────────────── */}
+      {/* ── En-tête ────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 mb-2">
 
-        {/* Avatar cliquable → AvatarPicker */}
         <div ref={pickerAnchor} className="relative shrink-0">
           <button
             onMouseDown={(e) => e.stopPropagation()}
@@ -598,12 +558,11 @@ function ReminderCard({
             className="relative group rounded-full focus:outline-none"
           >
             <AvatarDisplay
-              initial={personInitial}
+              initial={zoneInitial}
               photoLink={photoLink}
               preset={preset}
               size={34}
             />
-            {/* Overlay crayon */}
             <div className="absolute inset-0 rounded-full bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center justify-center">
               <span style={{ fontSize: 9, color: "white", fontWeight: 700 }}>✎</span>
             </div>
@@ -612,7 +571,7 @@ function ReminderCard({
           <AnimatePresence>
             {showPicker && (
               <AvatarPicker
-                initial={personInitial}
+                initial={zoneInitial}
                 photoLink={photoLink}
                 cardColor={cardColor}
                 onPhotoChange={(v) => { onPhotoChange(v); }}
@@ -623,20 +582,13 @@ function ReminderCard({
           </AnimatePresence>
         </div>
 
-        {/* Nom + mood label */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            {isActive && (
-              <span
-                className="h-1.5 w-1.5 rounded-full shrink-0"
-                style={{ backgroundColor: preset.from }}
-              />
-            )}
             <span
               className="text-[11px] font-bold uppercase tracking-wider truncate"
               style={{ color: preset.to }}
             >
-              {personName}
+              {zoneName}
             </span>
           </div>
           {mood && (
@@ -646,7 +598,6 @@ function ReminderCard({
           )}
         </div>
 
-        {/* Count badge */}
         <span
           className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0"
           style={{ backgroundColor: preset.cardBg, color: preset.from, border: `1px solid ${preset.border}` }}
@@ -654,18 +605,17 @@ function ReminderCard({
           {todos.length}
         </span>
 
-        {/* Mood picker */}
         <MoodButton current={mood} onChange={onMoodChange} />
       </div>
 
-      {/* ── Zone de note libre ───────────────────────────────────────────────── */}
+      {/* ── Note libre ─────────────────────────────────────────────────────── */}
       <div className="mb-2 relative">
         <textarea
           ref={textareaRef}
           value={localNote}
           onChange={(e) => handleNoteInput(e.target.value)}
           onBlur={handleNoteBlur}
-          placeholder={`Note…`}
+          placeholder="Note…"
           rows={1}
           className="w-full resize-none border-none outline-none bg-transparent text-[12px] leading-relaxed text-gray-600 placeholder:text-gray-300/60"
           style={{
@@ -690,10 +640,10 @@ function ReminderCard({
         </AnimatePresence>
       </div>
 
-      {/* ── Séparateur ──────────────────────────────────────────────────────── */}
+      {/* ── Séparateur ─────────────────────────────────────────────────────── */}
       <div className="h-px mb-3" style={{ backgroundColor: preset.border }} />
 
-      {/* ── Bouton Ajouter (haut à gauche, style primary) ───────────────────── */}
+      {/* ── Bouton Ajouter ─────────────────────────────────────────────────── */}
       <div className="mb-3">
         {isAdding ? (
           <div className="flex items-center gap-3 h-8 px-3 rounded-lg bg-white/70 border border-white/80">
@@ -722,7 +672,7 @@ function ReminderCard({
         )}
       </div>
 
-      {/* ── Liste des todos ──────────────────────────────────────────────────── */}
+      {/* ── Todos ──────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col gap-1.5">
         {todos.length === 0 && !isAdding && (
           <p className="text-xs italic text-gray-300 py-2 text-center">Aucune tâche</p>
@@ -797,12 +747,11 @@ function ReminderCard({
           ))}
         </AnimatePresence>
       </div>
-
     </div>
   );
 }
 
-// ── RemindersGrid ──────────────────────────────────────────────────────────────
+// ── AchatCardsGrid ─────────────────────────────────────────────────────────────
 
 interface ProfileData {
   userId:          string;
@@ -811,29 +760,18 @@ interface ProfileData {
   cardColor:       string;
 }
 
-export function RemindersGrid({
-  notesMap,
-  activeUser,
-  onNoteChanged,
-}: {
-  notesMap:       Record<string, TodoItem[]>;
-  activeUser?:    string;
-  onNoteChanged?: (person: string) => void;
-}) {
+export function AchatCardsGrid() {
   const [todosMap, setTodosMap] = useState<Record<string, TodoItem[]>>(() => {
     const m: Record<string, TodoItem[]> = {};
-    for (const p of PEOPLE) m[p.key] = notesMap[p.key] ?? [];
+    for (const z of ACHAT_ZONES) m[z.key] = [];
     return m;
   });
 
   const [notesContent, setNotesContent] = useState<Record<string, string>>({});
   const [profiles,     setProfiles]     = useState<Record<string, ProfileData>>({});
 
-  const saveTimers       = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const mountedRef       = useRef(true);
-  const editingKeyRef    = useRef<string | null>(null);
-  const onNoteChangedRef = useRef(onNoteChanged);
-  useEffect(() => { onNoteChangedRef.current = onNoteChanged; }, [onNoteChanged]);
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const mountedRef = useRef(true);
 
   // Chargement des profils
   useEffect(() => {
@@ -851,50 +789,26 @@ export function RemindersGrid({
   useEffect(() => {
     fetch("/api/notes")
       .then((r) => r.json())
-      .then((data: { notes: { person: string; content: string }[] }) => {
-        const map: Record<string, string> = {};
-        for (const n of data.notes) map[n.person] = n.content ?? "";
-        setNotesContent(map);
+      .then((data: { notes: { person: string; content: string; todos: TodoItem[] | string }[] }) => {
+        const contentMap: Record<string, string>    = {};
+        const todosMapNew: Record<string, TodoItem[]> = {};
+        for (const n of data.notes) {
+          if (!ACHAT_ZONES.find(z => z.key === n.person)) continue;
+          contentMap[n.person] = n.content ?? "";
+          let todos: TodoItem[] = [];
+          if (Array.isArray(n.todos))           todos = n.todos;
+          else if (typeof n.todos === "string") { try { todos = JSON.parse(n.todos); } catch { todos = []; } }
+          todosMapNew[n.person] = todos;
+        }
+        setNotesContent(contentMap);
+        setTodosMap(prev => ({ ...prev, ...todosMapNew }));
       })
       .catch(() => {});
   }, []);
 
-  // SSE todos
   useEffect(() => {
     mountedRef.current = true;
-    let es: EventSource | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const connect = () => {
-      if (!mountedRef.current) return;
-      try {
-        es = new EventSource("/api/notes/stream");
-        es.addEventListener("note-changed", (event) => {
-          if (!mountedRef.current) return;
-          try {
-            const note = JSON.parse((event as MessageEvent).data) as { person: string; todos: TodoItem[] | string };
-            onNoteChangedRef.current?.(note.person);
-            if (editingKeyRef.current === note.person) return;
-            let todos: TodoItem[] = [];
-            if (Array.isArray(note.todos))           todos = note.todos;
-            else if (typeof note.todos === "string") { try { todos = JSON.parse(note.todos); } catch { todos = []; } }
-            setTodosMap(prev => ({ ...prev, [note.person]: todos }));
-          } catch { /* malformed */ }
-        });
-        es.onerror = () => {
-          if (!mountedRef.current) return;
-          es?.close();
-          reconnectTimer = setTimeout(connect, 10_000);
-        };
-      } catch { /* SSE not supported */ }
-    };
-
-    connect();
-    return () => {
-      mountedRef.current = false;
-      es?.close();
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-    };
+    return () => { mountedRef.current = false; };
   }, []);
 
   const handleUpdate = useCallback((key: string, next: TodoItem[]) => {
@@ -903,7 +817,7 @@ export function RemindersGrid({
     saveTimers.current[key] = setTimeout(() => apiSaveTodos(key, next), 600);
   }, []);
 
-  const handleReceiveTodo = useCallback((fromKey: PersonKey, toKey: string, todoId: string) => {
+  const handleReceiveTodo = useCallback((fromKey: ZoneKey, toKey: string, todoId: string) => {
     setTodosMap(prev => {
       const todo = prev[fromKey]?.find(t => t.id === todoId);
       if (!todo) return prev;
@@ -936,26 +850,24 @@ export function RemindersGrid({
   }, []);
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-      {PEOPLE.map((p) => (
-        <ReminderCard
-          key={p.key}
-          personKey={p.key}
-          personName={p.name}
-          personInitial={p.initial}
-          todos={todosMap[p.key] ?? []}
-          note={notesContent[p.key] ?? ""}
-          mood={profiles[p.key]?.mood ?? ""}
-          photoLink={profiles[p.key]?.profilePhotoLink ?? null}
-          cardColor={profiles[p.key]?.cardColor || p.defaultColor}
-          isActive={p.key === activeUser}
-          onUpdate={(next) => handleUpdate(p.key, next)}
-          onReceiveTodo={(fromKey, todoId) => handleReceiveTodo(fromKey, p.key, todoId)}
-          onEditingChange={(isEditing) => { editingKeyRef.current = isEditing ? p.key : null; }}
-          onMoodChange={(emoji) => handleMoodChange(p.key, emoji)}
-          onNoteChange={(content) => handleNoteChange(p.key, content)}
-          onPhotoChange={(link) => handlePhotoChange(p.key, link)}
-          onColorChange={(colorKey) => handleColorChange(p.key, colorKey)}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+      {ACHAT_ZONES.map((z) => (
+        <AchatCard
+          key={z.key}
+          zoneKey={z.key}
+          zoneName={z.name}
+          zoneInitial={z.initial}
+          todos={todosMap[z.key] ?? []}
+          note={notesContent[z.key] ?? ""}
+          mood={profiles[z.key]?.mood ?? ""}
+          photoLink={profiles[z.key]?.profilePhotoLink ?? null}
+          cardColor={profiles[z.key]?.cardColor || z.defaultColor}
+          onUpdate={(next) => handleUpdate(z.key, next)}
+          onReceiveTodo={(fromKey, todoId) => handleReceiveTodo(fromKey, z.key, todoId)}
+          onMoodChange={(emoji) => handleMoodChange(z.key, emoji)}
+          onNoteChange={(content) => handleNoteChange(z.key, content)}
+          onPhotoChange={(link) => handlePhotoChange(z.key, link)}
+          onColorChange={(colorKey) => handleColorChange(z.key, colorKey)}
         />
       ))}
     </div>

@@ -21,6 +21,10 @@ import { DTFProductionTable } from "./dtf-production-table";
 import { WorkflowListsGrid } from "./workflow-list";
 import { PRTManager } from "./prt-manager";
 import { PlanningTable, type PlanningItem } from "./planning-table";
+import { ThemeSwitcher } from "./theme-switcher";
+import { ClientProTable, type ClientItem } from "./client-pro-table";
+import { AchatTextileTable } from "./achat-textile-table";
+import { AchatCardsGrid } from "./achat-cards-grid";
 
 interface PRTItem {
   id: string;
@@ -425,18 +429,26 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
   const [sseConnected, setSseConnected] = useState(false);
   const [notes, setNotes]               = useState<Record<string, NoteData>>({});
   const [notesReady, setNotesReady]     = useState(false);
-  const [viewTab, setViewTab] = useState<'flux' | 'commandes' | 'production_dtf' | 'workflow' | 'demande_prt' | 'planning'>('flux');
+  const [viewTab, setViewTab] = useState<'flux' | 'achat' | 'planning' | 'clients_pro' | 'demande_prt' | 'production_dtf' | 'workflow' | 'achat_textile'>('flux');
+  // Badge de notification sur l'onglet Flux
+  const [fluxHasNotif, setFluxHasNotif] = useState(false);
+  // Badge de notification sur l'onglet Demande de DTF (uniquement pour loic et charlie)
+  const [prtHasNotif, setPrtHasNotif] = useState(false);
+  const prtCountRef = useRef<number>(0);
+  // Ref pour connaître l'onglet courant dans les callbacks SSE (évite les stale closures)
+  const viewTabRef = useRef(viewTab);
+  useEffect(() => { viewTabRef.current = viewTab; }, [viewTab]);
   const [workflowItems, setWorkflowItems] = useState<WorkflowItem[]>([]);
   const [prtItems, setPrtItems] = useState<PRTItem[]>([]);
   const [allPrtItems, setAllPrtItems] = useState<PRTItem[]>([]);
   const [planningItems, setPlanningItems] = useState<PlanningItem[]>([]);
+  const [clientItems, setClientItems] = useState<ClientItem[]>([]);
 
   const addOrder = async () => {
     const res = await fetch("/api/orders/manual", { method: "POST" });
     if (!res.ok) return;
     const { order } = await res.json();
     setOrders((prev) => [order, ...prev]);
-    setViewTab("commandes");
   };
 
   // ── Session temporelle ────────────────────────────────────────────────────
@@ -614,7 +626,7 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
       .catch(() => {});
   }, []);
 
-  // ── PRT items ────────────────────────────────────────────────────────────────
+  // ── PRT items + polling badge DTF (toutes les 15 s pour loic et charlie) ────
 
   useEffect(() => {
     fetch("/api/prt-requests")
@@ -623,8 +635,31 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
         const items = data.items ?? [];
         setPrtItems(items);
         setAllPrtItems(items);
+        prtCountRef.current = items.length;
       })
       .catch(() => {});
+  }, []);
+
+  // Polling léger : détecte les nouvelles demandes DTF pour loic et charlie
+  useEffect(() => {
+    const id = setInterval(() => {
+      const sess = sessionRef.current;
+      if (!sess) return;
+      if (sess.name !== "loic" && sess.name !== "charlie") return;
+      if (viewTabRef.current === "demande_prt") return; // déjà visible
+      fetch("/api/prt-requests")
+        .then((r) => r.json())
+        .then((data) => {
+          const count = (data.items ?? []).length;
+          if (count > prtCountRef.current) {
+            setPrtHasNotif(true);
+            setAllPrtItems(data.items ?? []);
+          }
+          prtCountRef.current = count;
+        })
+        .catch(() => {});
+    }, 15_000);
+    return () => clearInterval(id);
   }, []);
 
   // ── Planning items ─────────────────────────────────────────────────────────
@@ -650,6 +685,54 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
     const id = setInterval(fetchPlanning, 10_000);
     return () => clearInterval(id);
   }, [fetchPlanning]);
+
+  // ── Client Pro items ───────────────────────────────────────────────────────
+  const fetchClients = useCallback(() => {
+    fetch("/api/clients")
+      .then((r) => r.json())
+      .then((data) => { setClientItems(data.clients ?? []); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchClients();
+  }, [fetchClients]);
+
+  // Refresh clients when switching to the clients_pro tab
+  useEffect(() => {
+    if (viewTab === "clients_pro") fetchClients();
+  }, [viewTab, fetchClients]);
+
+  // ── Notification badge Flux ────────────────────────────────────────────────
+  // Appelé depuis RemindersGrid quand une note SSE arrive.
+  // Si la note concerne l'utilisateur actif ET qu'il n'est pas sur l'onglet Flux
+  // → on allume le badge.
+  const sessionRef = useRef(session);
+  useEffect(() => { sessionRef.current = session; }, [session]);
+
+  const handleNoteChangedForNotif = useCallback((person: string) => {
+    if (!sessionRef.current) return;
+    if (person !== sessionRef.current.name) return;
+    if (viewTabRef.current === 'flux') return; // déjà visible → pas de badge
+    setFluxHasNotif(true);
+  }, []);
+
+  // Changement d'onglet : efface le badge quand l'utilisateur retourne sur l'onglet concerné
+  const handleTabChange = useCallback((tab: typeof viewTab) => {
+    setViewTab(tab);
+    if (tab === 'flux') setFluxHasNotif(false);
+    if (tab === 'demande_prt') setPrtHasNotif(false);
+  }, []);
+
+  // Appelé depuis PRTManager quand une nouvelle demande est créée
+  const handleNewPrtRequest = useCallback(() => {
+    prtCountRef.current += 1;
+    const sess = sessionRef.current;
+    if (!sess) return;
+    if (sess.name !== "loic" && sess.name !== "charlie") return;
+    if (viewTabRef.current === "demande_prt") return;
+    setPrtHasNotif(true);
+  }, []);
 
   // ── Connexion / Déconnexion ────────────────────────────────────────────────
   const handleLogin = useCallback((name: string) => {
@@ -699,87 +782,80 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
 
   return (
     <div
-      className="flex flex-col h-svh w-full overflow-hidden bg-white"
+      className="flex flex-col h-svh w-full overflow-hidden bg-background"
       style={{ fontFamily: "'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" }}
     >
 
       {/* ── Header : tabs centrés · user à gauche · indicateur live à droite ─ */}
-      <div className="shrink-0 px-4 sm:px-6 pt-5 pb-3 relative flex items-center justify-center border-b border-gray-100">
+      <div className="shrink-0 px-4 sm:px-6 pt-5 pb-3 relative flex items-center justify-center border-b border-black/[0.06] dark:border-border bg-white/80 dark:bg-card/80 backdrop-blur-xl">
         {/* Tabs — centrés */}
         <div className="flex items-center gap-3">
-          <div className="flex gap-1 p-1 rounded-xl bg-gray-100/80 overflow-x-auto">
-            {(['flux', 'commandes', 'demande_prt', 'production_dtf', 'workflow', 'planning'] as const).map((v) => (
+          <div className="flex gap-1 p-1 rounded-xl bg-gray-100/80 dark:bg-muted/80 overflow-x-auto">
+            {(['flux', 'achat', 'planning', 'clients_pro', 'demande_prt', 'production_dtf', 'workflow', 'achat_textile'] as const).map((v) => (
               <button
                 key={v}
-                onClick={() => setViewTab(v)}
+                onClick={() => handleTabChange(v)}
                 className={cn(
-                  "px-3.5 py-1.5 rounded-[10px] text-[13px] font-semibold transition-all whitespace-nowrap",
+                  "relative px-3.5 py-1.5 rounded-[10px] text-[13px] font-semibold transition-all whitespace-nowrap",
                   "[touch-action:manipulation]",
                   viewTab === v
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {v === 'flux' ? 'Flux' : v === 'commandes' ? 'Commandes' : v === 'demande_prt' ? 'Demande de PRT' : v === 'production_dtf' ? 'Production' : v === 'workflow' ? 'Gestion d\'atelier' : 'Planning'}
+                {v === 'flux' ? 'Flux'
+                  : v === 'achat' ? 'Achat'
+                  : v === 'planning' ? 'Planning'
+                  : v === 'clients_pro' ? 'Clients Pro'
+                  : v === 'demande_prt' ? 'Demande de DTF'
+                  : v === 'production_dtf' ? 'Production'
+                  : v === 'workflow' ? "Gestion d'atelier"
+                  : 'Achat Textile'}
+                {v === 'flux' && fluxHasNotif && (
+                  <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-red-400 border border-white" />
+                )}
+                {v === 'demande_prt' && prtHasNotif && (
+                  <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-orange-400 border border-white" />
+                )}
               </button>
             ))}
           </div>
-          {/* Bouton + commande — visible sur l'onglet commandes */}
-          {viewTab === 'commandes' && (
-            <button
-              onClick={addOrder}
-              className="flex items-center justify-center w-6 h-6 rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-all duration-150 shrink-0"
-              aria-label="Ajouter une commande"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          )}
         </div>
         {/* Utilisateur + déconnexion — positionné à gauche en absolu */}
         <div className="absolute left-4 sm:left-6">
           <button
             onClick={handleLogout}
             title="Se déconnecter"
-            className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gray-100/80 hover:bg-red-50 hover:border-red-100 border border-transparent transition-colors duration-150"
+            className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-muted/80 hover:bg-red-50 dark:hover:bg-red-950/40 hover:border-red-100 dark:hover:border-red-900/40 border border-transparent transition-colors duration-150"
           >
-            <span className="h-5 w-5 rounded-full bg-gray-800 flex items-center justify-center text-[10px] font-bold text-white leading-none select-none">
+            <span className="h-5 w-5 rounded-full bg-foreground/80 flex items-center justify-center text-[10px] font-bold text-background leading-none select-none">
               {(PERSON_DISPLAY.find(([k]) => k === session.name)?.[1] ?? session.name).charAt(0).toUpperCase()}
             </span>
-            <span className="text-[12px] font-semibold text-gray-600 group-hover:text-red-600 transition-colors duration-150 hidden sm:block">
+            <span className="text-[12px] font-semibold text-muted-foreground group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors duration-150 hidden sm:block">
               {PERSON_DISPLAY.find(([k]) => k === session.name)?.[1] ?? session.name}
             </span>
-            <LogOut className="h-3 w-3 text-gray-400 group-hover:text-red-500 transition-colors duration-150" />
+            <LogOut className="h-3 w-3 text-muted-foreground/60 group-hover:text-red-500 dark:group-hover:text-red-400 transition-colors duration-150" />
           </button>
         </div>
 
-        {/* Indicateur live — positionné à droite en absolu */}
-        <div className="absolute right-4 sm:right-6">
+        {/* ThemeSwitcher + Indicateur live — positionnés à droite en absolu */}
+        <div className="absolute right-4 sm:right-6 flex items-center gap-2">
+          <ThemeSwitcher />
           <LiveIndicator connected={sseConnected} />
         </div>
       </div>
 
       {/* ── Contenu principal ───────────────────────────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-0">
 
         {/* ══ VUE FLUX — 4 cartes collaborateurs ══════════════════════════════ */}
         <div className={cn(viewTab !== 'flux' && 'hidden')}>
-          <RemindersGrid key={String(notesReady)} notesMap={notesMap} activeUser={session.name} />
+          <RemindersGrid key={String(notesReady)} notesMap={notesMap} activeUser={session.name} onNoteChanged={handleNoteChangedForNotif} />
         </div>
 
-        {/* ══ VUE COMMANDES — Kanban t-shirts uniquement ══════════════════════ */}
-        <div className={cn(viewTab !== 'commandes' && 'hidden')}>
-          <KanbanBoard
-            columns={TSHIRT_COLUMNS}
-            orders={tshirt}
-            newOrderIds={newOrderIds}
-            onUpdateOrder={handleUpdateOrder}
-            onDeleteOrder={handleDeleteOrder}
-          />
-        </div>
-
-        {/* ══ VUE DEMANDE DE PRT — Tableau indépendant ════════════════════════ */}
+        {/* ══ VUE DEMANDE DE DTF — Tableau indépendant ════════════════════════ */}
         <div className={cn(viewTab !== 'demande_prt' && 'hidden')}>
-          <PRTManager items={allPrtItems} onItemsChange={setAllPrtItems} />
+          <PRTManager items={allPrtItems} onItemsChange={setAllPrtItems} onNewRequest={handleNewPrtRequest} />
         </div>
 
         {/* ══ VUE PRODUCTION DTF ═════════════════════════════════════════════ */}
@@ -803,6 +879,23 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
             onEditingChange={(isEditing) => { planningEditingRef.current = isEditing; }}
           />
         </div>
+
+        {/* ══ VUE CLIENTS PRO — Base de données clients ═══════════════════════ */}
+        <div className={cn(viewTab !== 'clients_pro' && 'hidden', 'h-full')}>
+          <ClientProTable
+            clients={clientItems}
+            onClientsChange={setClientItems}
+          />
+        </div>
+
+        {/* ══ VUE ACHAT — 3 cartes SXM / Europe / USA ════════════════════════ */}
+        {viewTab === 'achat' && <AchatCardsGrid />}
+
+        {/* ══ VUE ACHAT TEXTILE — Tableau des commandes textile ════════════════ */}
+        <div className={cn(viewTab !== 'achat_textile' && 'hidden', 'h-full')}>
+          <AchatTextileTable activeUser={session.name} />
+        </div>
+
 
       </div>
 
