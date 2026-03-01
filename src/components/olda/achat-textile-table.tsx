@@ -295,12 +295,14 @@ export function AchatTextileTable({ activeUser }: AchatTextileTableProps) {
                 <input
                   type="text"
                   inputMode="numeric"
-                  value={row.quantite}
+                  value={row.quantite === 0 ? "" : row.quantite}
                   onChange={e => {
-                    const val = parseInt(e.target.value.replace(/\D/g, "")) || 1;
+                    const raw = e.target.value.replace(/\D/g, "");
+                    const val = raw === "" ? 0 : parseInt(raw);
                     updateField(row.id, "quantite", val);
                   }}
-                  className={cn(CELL, "text-[13px] text-slate-900 bg-transparent outline-none text-center w-full")}
+                  placeholder="Qté"
+                  className={cn(CELL, "text-[13px] text-slate-900 bg-transparent outline-none text-center w-full placeholder:text-slate-300")}
                 />
 
                 {/* Livraison */}

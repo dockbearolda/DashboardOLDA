@@ -24,6 +24,7 @@ import { PlanningTable, type PlanningItem } from "./planning-table";
 import { ThemeSwitcher } from "./theme-switcher";
 import { ClientProTable, type ClientItem } from "./client-pro-table";
 import { AchatTextileTable } from "./achat-textile-table";
+import { AchatCardsGrid } from "./achat-cards-grid";
 
 interface PRTItem {
   id: string;
@@ -880,8 +881,9 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
           />
         </div>
 
-        {/* ══ VUE ACHAT TEXTILE — Tableau des commandes textile ════════════════ */}
-        <div className={cn(viewTab !== 'achat_textile' && 'hidden', 'h-full')}>
+        {/* ══ VUE ACHAT TEXTILE — 3 cartes + tableau commandes ════════════════ */}
+        <div className={cn(viewTab !== 'achat_textile' && 'hidden', 'flex flex-col gap-5')}>
+          <AchatCardsGrid />
           <AchatTextileTable activeUser={session.name} />
         </div>
 
