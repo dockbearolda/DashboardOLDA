@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const { sessionUser = "" } = body;
 
     const row = await prisma.achatTextile.create({
-      data: { sessionUser, marque: "-" },
+      data: { sessionUser, marque: "-", quantite: 0 },
     });
     return NextResponse.json({ row }, { status: 201 });
   } catch (err) {
