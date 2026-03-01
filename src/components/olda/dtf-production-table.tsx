@@ -137,31 +137,27 @@ export function DTFProductionTable({ activeUser }: DTFProductionTableProps) {
   // ── Slots OrderTable ──────────────────────────────────────────────────────
 
   const toolbar = (
-    <div className="flex items-center justify-between px-4 py-3">
-      <div className="flex items-center gap-2">
-        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-          Production DTF
-        </h3>
-        {saving && <Loader2 className="h-3.5 w-3.5 text-slate-300 animate-spin" />}
-      </div>
-      <div className="flex items-center gap-2">
-        {rows.some((r) => r.status === "termine") && (
-          <button
-            onClick={deleteTerminated}
-            className="h-8 px-2.5 rounded-lg text-[12px] font-semibold text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-          >
-            Supprimer les terminés
-          </button>
-        )}
+    <div className="flex items-center gap-3 px-4 py-3">
+      <button
+        onClick={addRow}
+        disabled={saving}
+        className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[13px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 transition-all duration-150 shadow-sm shrink-0"
+      >
+        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+        <span>Ajouter une production</span>
+      </button>
+      <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+        Production DTF
+      </h3>
+      <div className="flex-1" />
+      {rows.some((r) => r.status === "termine") && (
         <button
-          onClick={addRow}
-          disabled={saving}
-          className="h-8 w-8 rounded-lg flex items-center justify-center bg-slate-100 hover:bg-blue-50 text-slate-500 hover:text-blue-600 transition-colors"
-          title="Ajouter une ligne"
+          onClick={deleteTerminated}
+          className="h-8 px-2.5 rounded-lg text-[12px] font-semibold text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
         >
-          <Plus className="h-4 w-4" />
+          Supprimer les terminés
         </button>
-      </div>
+      )}
     </div>
   );
 

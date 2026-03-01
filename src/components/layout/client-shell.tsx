@@ -12,7 +12,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
   const isAtelier = pathname.startsWith("/dashboard/olda");
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       {!isAtelier && <Sidebar />}
       <main className={cn("relative min-h-screen", !isAtelier && "ml-0 md:ml-64")}>
         {children}

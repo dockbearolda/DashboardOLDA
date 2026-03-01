@@ -152,7 +152,7 @@ export function PRTManager({ items, onItemsChange }: PRTManagerProps) {
   // ── Toolbar ───────────────────────────────────────────────────────────────────
 
   const toolbar = (
-    <div className="flex items-center justify-between px-4 py-3">
+    <div className="flex items-center gap-3 px-4 py-3">
       {/* Input fichier caché — partagé entre toutes les lignes */}
       <input
         ref={fileInputRef}
@@ -160,23 +160,17 @@ export function PRTManager({ items, onItemsChange }: PRTManagerProps) {
         className="hidden"
         onChange={handleFileChange}
       />
+      <button
+        onClick={handleAddNew}
+        disabled={isAddingNew}
+        className="flex items-center gap-1.5 h-8 px-3 rounded-lg text-[13px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 transition-all duration-150 shadow-sm shrink-0"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        <span>Demande de DTF</span>
+      </button>
       <h2 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
         Demandes PRT
       </h2>
-      <motion.button
-        onClick={handleAddNew}
-        whileTap={{ scale: 0.92 }}
-        style={{ willChange: "transform" }}
-        className={cn(
-          "flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-[background-color,color,box-shadow]",
-          isAddingNew
-            ? "text-white bg-green-500 shadow-md"
-            : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200",
-        )}
-      >
-        <Plus className="h-4 w-4" />
-        {isAddingNew ? "Ajouté ✓" : "Ajouter"}
-      </motion.button>
     </div>
   );
 

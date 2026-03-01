@@ -157,6 +157,24 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════
+   THEMES COULEUR  ·  6 accents personnalisables
+   Appliqués via data-color-theme="xxx" sur <html>
+   Bleu = défaut (aucun attribut)
+   ════════════════════════════════════════════════════════════════════ */
+[data-color-theme="violet"] { --primary: 262 83% 58%; --ring: 262 83% 58%; }
+[data-color-theme="vert"]   { --primary: 142 71% 45%; --ring: 142 71% 45%; }
+[data-color-theme="orange"] { --primary: 25 95% 53%;  --ring: 25 95% 53%;  }
+[data-color-theme="rose"]   { --primary: 330 80% 60%; --ring: 330 80% 60%; }
+[data-color-theme="indigo"] { --primary: 234 89% 64%; --ring: 234 89% 64%; }
+
+/* Variantes dark : légèrement plus claires pour lisibilité sur fond sombre */
+.dark[data-color-theme="violet"] { --primary: 262 70% 70%; --ring: 262 70% 70%; }
+.dark[data-color-theme="vert"]   { --primary: 142 60% 55%; --ring: 142 60% 55%; }
+.dark[data-color-theme="orange"] { --primary: 25 90% 62%;  --ring: 25 90% 62%;  }
+.dark[data-color-theme="rose"]   { --primary: 330 75% 68%; --ring: 330 75% 68%; }
+.dark[data-color-theme="indigo"] { --primary: 234 80% 72%; --ring: 234 80% 72%; }
+
+/* ════════════════════════════════════════════════════════════════════
    BASE
    ════════════════════════════════════════════════════════════════════ */
 @layer base {
