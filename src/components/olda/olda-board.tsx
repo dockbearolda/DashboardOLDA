@@ -889,9 +889,7 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
         </div>
 
         {/* ══ VUE ACHAT — 3 cartes SXM / Europe / USA ════════════════════════ */}
-        <div className={cn(viewTab !== 'achat' && 'hidden')}>
-          <AchatCardsGrid />
-        </div>
+        {viewTab === 'achat' && <AchatCardsGrid />}
 
         {/* ══ VUE ACHAT TEXTILE — Tableau des commandes textile ════════════════ */}
         <div className={cn(viewTab !== 'achat_textile' && 'hidden', 'h-full')}>
