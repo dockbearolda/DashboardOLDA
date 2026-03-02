@@ -20,7 +20,7 @@ import {
   useState, useCallback, useMemo, useRef, useEffect, type CSSProperties,
 } from "react";
 import {
-  Trash2, Plus, ChevronDown, GripVertical, Search, Calendar, X, User, Eye,
+  Trash2, Plus, ChevronDown, GripVertical, Search, Calendar, X, User,
   AlertTriangle, ArrowUp, ArrowDown, ArrowUpDown, Package, Shirt, Scissors, Printer,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -350,7 +350,7 @@ function SecteurPicker({ value, onChange }: { value: string; onChange: (v: strin
         "bg-white/50 border-slate-100 hover:bg-white hover:border-slate-200",
         cfg ? "text-slate-700" : "text-slate-400",
       )}>
-        {cfg && <span className={cn("w-2 h-2 rounded-full flex-shrink-0 shrink-0", cfg.dot)} />}
+        {cfg && <span className="w-2 h-2 rounded-full flex-shrink-0 shrink-0" style={{ backgroundColor: cfg.dotHex }} />}
         <span className="truncate flex-1">{cfg?.label ?? "—"}</span>
         <ChevronDown className="h-3 w-3 opacity-50 shrink-0" />
       </div>
@@ -1098,7 +1098,7 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
       </div>
 
       {/* ── Tabs ─────────────────────────────────────────────────────────────── */}
-      <div className="border-b border-black/[0.06] bg-white overflow-x-auto">
+      <div className="bg-white overflow-x-auto">
         <div className="flex justify-start items-stretch gap-0 px-4 min-w-max">
           {TABS.map((tab) => {
             const active = activeTab === tab.key;
@@ -1137,13 +1137,14 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
           })}
         </div>
       </div>
+      <div className="h-px bg-black/[0.06] ml-[10%]" />
 
       {/* ── Table ───────────────────────────────────────────────────────────── */}
       <div className="overflow-auto flex-1">
         <div style={{ minWidth: "1050px" }}>
 
           {/* Column headers — sticky */}
-          <div className="grid bg-[#f9f9fb] border-b border-black/[0.06] border-l-4 border-l-transparent sticky top-0 z-10" style={GRID_STYLE}>
+          <div className="grid bg-[#f9f9fb] border-l-4 border-l-transparent sticky top-0 z-10" style={GRID_STYLE}>
             {COL_HEADERS.map(({ label, align, sortKey }, i) => {
               const isSorted = sortConfig?.col === sortKey;
               return (
@@ -1174,6 +1175,7 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
               );
             })}
           </div>
+          <div className="h-px bg-black/[0.06] ml-[20%]" />
 
           {/* Rows — layout animé + indicateur de position fluide */}
           <div
@@ -1421,20 +1423,6 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
                         </div>
                       </div>
 
-                      {/* 9b · Détails — bouton overlay visible au hover */}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setDetailId(item.id); }}
-                        className={cn(
-                          "absolute top-1/2 -translate-y-1/2 right-[48px] z-10",
-                          "opacity-0 group-hover:opacity-100",
-                          "p-1 rounded-md text-slate-300 hover:text-blue-500 hover:bg-blue-50",
-                          "transition-[opacity,color,background-color] duration-100",
-                        )}
-                        title="Voir les détails"
-                        type="button"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                      </button>
 
                       {/* 10 · Supprimer (2 clics pour confirmer) */}
                       <div className="h-full flex items-center justify-center">
@@ -1672,7 +1660,7 @@ function PlanningDetailPanel({
                 <DetailRow label="Secteur">
                   {secteurCfg ? (
                     <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border", secteurCfg.pill)}>
-                      <span className={cn("w-1.5 h-1.5 rounded-full", secteurCfg.dot)} />
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: secteurCfg.dotHex }} />
                       {secteurCfg.label}
                     </span>
                   ) : <span className="text-slate-300">—</span>}

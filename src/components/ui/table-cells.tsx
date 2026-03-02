@@ -70,28 +70,32 @@ export const STATUS_BADGE_DEFAULT = "bg-slate-50 text-slate-600 border-slate-100
 /** Configuration complète des secteurs : pill Tailwind + dot couleur */
 export const SECTEUR_CONFIG = [
   {
-    value: "Textiles",
-    label: "Textiles",
-    pill:  "bg-emerald-50 text-emerald-700 border-emerald-100",
-    dot:   "bg-emerald-400",
+    value:   "Textiles",
+    label:   "Textiles",
+    pill:    "bg-rose-50 text-rose-700 border-rose-200",
+    dot:     "",
+    dotHex:  "#d4748a",   // bordeaux
   },
   {
-    value: "Gravure et découpe laser",
-    label: "Gravure & Découpe",
-    pill:  "bg-violet-50 text-violet-700 border-violet-100",
-    dot:   "bg-violet-400",
+    value:   "Gravure et découpe laser",
+    label:   "Gravure & Découpe",
+    pill:    "bg-slate-100 text-slate-600 border-slate-200",
+    dot:     "",
+    dotHex:  "#7a95b8",   // gris bleu
   },
   {
-    value: "Impression UV",
-    label: "Impression UV",
-    pill:  "bg-cyan-50 text-cyan-700 border-cyan-100",
-    dot:   "bg-cyan-400",
+    value:   "Impression UV",
+    label:   "Impression UV",
+    pill:    "bg-violet-50 text-violet-700 border-violet-200",
+    dot:     "",
+    dotHex:  "#9b7ecb",   // violet
   },
   {
-    value: "Goodies",
-    label: "Goodies",
-    pill:  "bg-amber-50 text-amber-700 border-amber-100",
-    dot:   "bg-amber-400",
+    value:   "Goodies",
+    label:   "Goodies",
+    pill:    "bg-stone-100 text-stone-600 border-stone-200",
+    dot:     "",
+    dotHex:  "#b8916a",   // marron
   },
 ] as const;
 

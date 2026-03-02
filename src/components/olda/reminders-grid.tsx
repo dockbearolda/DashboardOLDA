@@ -45,7 +45,8 @@ interface ColorPreset {
 }
 
 const COLOR_PRESETS: ColorPreset[] = [
-  { key: "slate",  label: "Graphite", from: "#3a3a3c", to: "#1c1c1e", cardBg: "#f2f2f4",  border: "rgba(58,58,60,0.18)" },
+  { key: "slate",   label: "Graphite", from: "#3a3a3c", to: "#1c1c1e", cardBg: "#f2f2f4",  border: "rgba(58,58,60,0.18)"   },
+  { key: "neutral", label: "Neutre",   from: "#aeaeb2", to: "#8e8e93", cardBg: "#f8f8fa",  border: "rgba(142,142,147,0.18)" },
   { key: "blue",   label: "Bleu",     from: "#0a84ff", to: "#0055d4", cardBg: "#e8f2ff",  border: "rgba(10,132,255,0.22)" },
   { key: "teal",   label: "Teal",     from: "#5ac8fa", to: "#0a7ea4", cardBg: "#e5f7fd",  border: "rgba(90,200,250,0.28)" },
   { key: "purple", label: "Violet",   from: "#bf5af2", to: "#9a42c8", cardBg: "#f2e8fd",  border: "rgba(191,90,242,0.22)" },
@@ -406,6 +407,7 @@ function ReminderCard({
   photoLink,
   cardColor,
   isActive,
+  hideNote = false,
   onUpdate,
   onReceiveTodo,
   onEditingChange,
@@ -423,6 +425,7 @@ function ReminderCard({
   photoLink:       string | null;
   cardColor:       string;
   isActive?:       boolean;
+  hideNote?:       boolean;
   onUpdate:        (next: TodoItem[]) => void;
   onReceiveTodo:   (fromKey: PersonKey, todoId: string) => void;
   onEditingChange?:(isEditing: boolean) => void;
@@ -659,7 +662,7 @@ function ReminderCard({
       </div>
 
       {/* ── Zone de note libre ───────────────────────────────────────────────── */}
-      <div className="mb-2 relative rounded-lg px-2 py-1.5" style={{ background: `${preset.from}18`, borderLeft: `3px solid ${preset.from}` }}>
+      {!hideNote && <div className="mb-2 relative rounded-lg px-2 py-1.5" style={{ background: `${preset.from}18`, borderLeft: `3px solid ${preset.from}` }}>
         <p className="text-[9px] font-bold uppercase tracking-widest mb-0.5" style={{ color: preset.from }}>Informations importantes</p>
         <textarea
           ref={textareaRef}
@@ -687,7 +690,7 @@ function ReminderCard({
             </motion.span>
           )}
         </AnimatePresence>
-      </div>
+      </div>}
 
       {/* ── Séparateur ──────────────────────────────────────────────────────── */}
       <div className="h-px mb-3" style={{ backgroundColor: preset.border }} />
@@ -950,8 +953,9 @@ export function RemindersGrid({
         note={notesContent["commun"] ?? ""}
         mood=""
         photoLink={null}
-        cardColor="teal"
+        cardColor="neutral"
         isActive={false}
+        hideNote={true}
         onUpdate={(next) => handleUpdate("commun", next)}
         onReceiveTodo={(fromKey, todoId) => handleReceiveTodo(fromKey, "commun", todoId)}
         onEditingChange={(isEditing) => { editingKeyRef.current = isEditing ? "commun" : null; }}
