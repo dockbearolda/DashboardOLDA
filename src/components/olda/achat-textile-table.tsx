@@ -8,7 +8,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderTable } from "@/components/ui/table-shell";
 
@@ -54,10 +54,10 @@ function getLivraison(value: string): LivraisonOption {
   return LIVRAISONS.find(l => l.value === value) ?? LIVRAISONS[0];
 }
 
-// Grid : 12 colonnes données + 1 colonne suppression
+// Grid : 12 colonnes données + 1 colonne actions (dupliquer + supprimer)
 const GRID_STYLE = {
   gridTemplateColumns:
-    "minmax(110px,1fr) minmax(110px,1fr) 106px 60px minmax(130px,1.5fr) 100px 90px 70px 58px 120px 82px 80px 44px",
+    "minmax(110px,1fr) minmax(110px,1fr) 106px 60px minmax(130px,1.5fr) 100px 90px 70px 58px 120px 82px 80px 80px",
 };
 const MIN_WIDTH = 1260;
 const CELL = "px-3 py-2.5";
@@ -118,6 +118,36 @@ export function AchatTextileTable({ activeUser }: AchatTextileTableProps) {
     } catch { /* ignore */ }
     finally { setSaving(false); }
   }, [activeUser, saving]);
+
+  // ── Dupliquer ─────────────────────────────────────────────────────────────
+
+  const duplicateRow = useCallback(async (row: AchatTextileRow) => {
+    try {
+      const res = await fetch("/api/achat-textile", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          sessionUser: activeUser ?? "",
+          client:      row.client,
+          fournisseur: row.fournisseur,
+          marque:      row.marque,
+          genre:       row.genre,
+          designation: row.designation,
+          reference:   row.reference,
+          couleur:     row.couleur,
+          livraison:   row.livraison,
+        }),
+      });
+      if (!res.ok) return;
+      const { row: newRow } = await res.json();
+      setRows(prev => {
+        const idx = prev.findIndex(r => r.id === row.id);
+        const next = [...prev];
+        next.splice(idx + 1, 0, newRow);
+        return next;
+      });
+    } catch { /* ignore */ }
+  }, [activeUser]);
 
   // ── Supprimer ─────────────────────────────────────────────────────────────
 
@@ -329,8 +359,15 @@ export function AchatTextileTable({ activeUser }: AchatTextileTableProps) {
                   {row.createdAt ? fmtDate(row.createdAt) : "—"}
                 </div>
 
-                {/* Supprimer */}
-                <div className="flex items-center justify-center px-2">
+                {/* Actions : dupliquer + supprimer */}
+                <div className="flex items-center justify-center gap-1 px-2">
+                  <button
+                    onClick={() => duplicateRow(row)}
+                    className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-colors opacity-0 group-hover:opacity-100"
+                    title="Dupliquer"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
                   <button
                     onClick={() => deleteRow(row.id)}
                     className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
