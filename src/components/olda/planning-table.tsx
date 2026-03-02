@@ -20,7 +20,7 @@ import {
   useState, useCallback, useMemo, useRef, useEffect, type CSSProperties,
 } from "react";
 import {
-  Trash2, Plus, ChevronDown, GripVertical, Search, Calendar, X, User, Eye,
+  Trash2, Plus, ChevronDown, GripVertical, Search, Calendar, X, User,
   AlertTriangle, ArrowUp, ArrowDown, ArrowUpDown, Package, Shirt, Scissors, Printer,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -1421,20 +1421,6 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
                         </div>
                       </div>
 
-                      {/* 9b · Détails — bouton overlay visible au hover */}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setDetailId(item.id); }}
-                        className={cn(
-                          "absolute top-1/2 -translate-y-1/2 right-[48px] z-10",
-                          "opacity-0 group-hover:opacity-100",
-                          "p-1 rounded-md text-slate-300 hover:text-blue-500 hover:bg-blue-50",
-                          "transition-[opacity,color,background-color] duration-100",
-                        )}
-                        title="Voir les détails"
-                        type="button"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                      </button>
 
                       {/* 10 · Supprimer (2 clics pour confirmer) */}
                       <div className="h-full flex items-center justify-center">
