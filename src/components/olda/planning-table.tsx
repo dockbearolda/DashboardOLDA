@@ -350,7 +350,7 @@ function SecteurPicker({ value, onChange }: { value: string; onChange: (v: strin
         "bg-white/50 border-slate-100 hover:bg-white hover:border-slate-200",
         cfg ? "text-slate-700" : "text-slate-400",
       )}>
-        {cfg && <span className={cn("w-2 h-2 rounded-full flex-shrink-0 shrink-0", cfg.dot)} />}
+        {cfg && <span className="w-2 h-2 rounded-full flex-shrink-0 shrink-0" style={{ backgroundColor: cfg.dotHex }} />}
         <span className="truncate flex-1">{cfg?.label ?? "—"}</span>
         <ChevronDown className="h-3 w-3 opacity-50 shrink-0" />
       </div>
@@ -1672,7 +1672,7 @@ function PlanningDetailPanel({
                 <DetailRow label="Secteur">
                   {secteurCfg ? (
                     <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border", secteurCfg.pill)}>
-                      <span className={cn("w-1.5 h-1.5 rounded-full", secteurCfg.dot)} />
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: secteurCfg.dotHex }} />
                       {secteurCfg.label}
                     </span>
                   ) : <span className="text-slate-300">—</span>}
