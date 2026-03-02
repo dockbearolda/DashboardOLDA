@@ -803,7 +803,7 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {v === 'flux' ? 'Flux'
+                {v === 'flux' ? 'Tâches'
                   : v === 'achat' ? 'Achat'
                   : v === 'planning' ? 'Planning'
                   : v === 'clients_pro' ? 'Clients Pro'
@@ -889,7 +889,9 @@ export function OldaBoard({ orders: initialOrders }: { orders: Order[] }) {
         </div>
 
         {/* ══ VUE ACHAT — 3 cartes SXM / Europe / USA ════════════════════════ */}
-        {viewTab === 'achat' && <AchatCardsGrid />}
+        <div className={cn(viewTab !== 'achat' && 'hidden')}>
+          <AchatCardsGrid />
+        </div>
 
         {/* ══ VUE ACHAT TEXTILE — Tableau des commandes textile ════════════════ */}
         <div className={cn(viewTab !== 'achat_textile' && 'hidden', 'h-full')}>

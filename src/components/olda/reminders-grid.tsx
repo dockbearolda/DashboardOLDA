@@ -31,7 +31,7 @@ const PEOPLE = [
   { key: "amandine", name: "Amandine", initial: "A", defaultColor: "gold"   },
 ] as const;
 
-type PersonKey = typeof PEOPLE[number]["key"];
+type PersonKey = typeof PEOPLE[number]["key"] | "commun";
 
 // ── Palettes de couleur (style iOS / macOS) ────────────────────────────────────
 
@@ -668,7 +668,7 @@ function ReminderCard({
           onBlur={handleNoteBlur}
           placeholder="Ajouter une information…"
           rows={1}
-          className="w-full resize-none border-none outline-none bg-transparent text-[13px] leading-relaxed text-gray-800 placeholder:text-gray-400/70 font-[family-name:var(--font-handwritten)]"
+          className="w-full resize-none border-none outline-none bg-transparent text-[13px] leading-relaxed text-gray-800 placeholder:text-gray-400/70"
           style={{
             caretColor: preset.from,
             overflow: "hidden",
@@ -707,7 +707,7 @@ function ReminderCard({
               }}
               onBlur={() => { commitDraft(); setIsAdding(false); }}
               placeholder="Nouvelle tâche..."
-              className="flex-1 text-[14px] text-gray-700 placeholder:text-gray-400 bg-transparent outline-none font-[family-name:var(--font-handwritten)]"
+              className="flex-1 text-[13px] text-gray-700 placeholder:text-gray-400 bg-transparent outline-none"
             />
           </div>
         ) : (
@@ -768,14 +768,14 @@ function ReminderCard({
                     if (e.key === "Escape") { setEditingId(null); setEditText(""); }
                   }}
                   onBlur={commitEdit}
-                  className="flex-1 text-[14px] text-gray-900 bg-transparent outline-none border-b font-[family-name:var(--font-handwritten)]"
+                  className="flex-1 text-[13px] font-medium text-gray-900 bg-transparent outline-none border-b"
                   style={{ borderColor: preset.from }}
                 />
               ) : (
                 <span
                   onClick={() => handleItemClick(todo)}
                   className={cn(
-                    "flex-1 text-[14px] select-none cursor-text transition-colors duration-150 font-[family-name:var(--font-handwritten)]",
+                    "flex-1 text-[13px] font-medium select-none cursor-text transition-colors duration-150",
                     todo.done ? "line-through text-gray-400" : "text-gray-900 hover:text-gray-700"
                   )}
                 >
@@ -821,6 +821,7 @@ export function RemindersGrid({
   const [todosMap, setTodosMap] = useState<Record<string, TodoItem[]>>(() => {
     const m: Record<string, TodoItem[]> = {};
     for (const p of PEOPLE) m[p.key] = notesMap[p.key] ?? [];
+    m["commun"] = [];
     return m;
   });
 
@@ -849,9 +850,14 @@ export function RemindersGrid({
   useEffect(() => {
     fetch("/api/notes")
       .then((r) => r.json())
-      .then((data: { notes: { person: string; content: string }[] }) => {
+      .then((data: { notes: { person: string; content: string; todos?: TodoItem[] }[] }) => {
         const map: Record<string, string> = {};
-        for (const n of data.notes) map[n.person] = n.content ?? "";
+        for (const n of data.notes) {
+          map[n.person] = n.content ?? "";
+          if (n.person === "commun" && Array.isArray(n.todos)) {
+            setTodosMap(prev => ({ ...prev, commun: n.todos! }));
+          }
+        }
         setNotesContent(map);
       })
       .catch(() => {});
@@ -934,28 +940,50 @@ export function RemindersGrid({
   }, []);
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-      {PEOPLE.map((p) => (
-        <ReminderCard
-          key={p.key}
-          personKey={p.key}
-          personName={p.name}
-          personInitial={p.initial}
-          todos={todosMap[p.key] ?? []}
-          note={notesContent[p.key] ?? ""}
-          mood={profiles[p.key]?.mood ?? ""}
-          photoLink={profiles[p.key]?.profilePhotoLink ?? null}
-          cardColor={profiles[p.key]?.cardColor || p.defaultColor}
-          isActive={p.key === activeUser}
-          onUpdate={(next) => handleUpdate(p.key, next)}
-          onReceiveTodo={(fromKey, todoId) => handleReceiveTodo(fromKey, p.key, todoId)}
-          onEditingChange={(isEditing) => { editingKeyRef.current = isEditing ? p.key : null; }}
-          onMoodChange={(emoji) => handleMoodChange(p.key, emoji)}
-          onNoteChange={(content) => handleNoteChange(p.key, content)}
-          onPhotoChange={(link) => handlePhotoChange(p.key, link)}
-          onColorChange={(colorKey) => handleColorChange(p.key, colorKey)}
-        />
-      ))}
+    <div className="flex flex-col gap-2.5">
+      {/* ── Tâche commune — pleine largeur ──────────────────────────────────── */}
+      <ReminderCard
+        personKey="commun"
+        personName="Tâche commune"
+        personInitial="★"
+        todos={todosMap["commun"] ?? []}
+        note={notesContent["commun"] ?? ""}
+        mood=""
+        photoLink={null}
+        cardColor="teal"
+        isActive={false}
+        onUpdate={(next) => handleUpdate("commun", next)}
+        onReceiveTodo={(fromKey, todoId) => handleReceiveTodo(fromKey, "commun", todoId)}
+        onEditingChange={(isEditing) => { editingKeyRef.current = isEditing ? "commun" : null; }}
+        onMoodChange={() => {}}
+        onNoteChange={(content) => handleNoteChange("commun", content)}
+        onPhotoChange={() => {}}
+        onColorChange={() => {}}
+      />
+      {/* ── Cartes individuelles ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        {PEOPLE.map((p) => (
+          <ReminderCard
+            key={p.key}
+            personKey={p.key}
+            personName={p.name}
+            personInitial={p.initial}
+            todos={todosMap[p.key] ?? []}
+            note={notesContent[p.key] ?? ""}
+            mood={profiles[p.key]?.mood ?? ""}
+            photoLink={profiles[p.key]?.profilePhotoLink ?? null}
+            cardColor={profiles[p.key]?.cardColor || p.defaultColor}
+            isActive={p.key === activeUser}
+            onUpdate={(next) => handleUpdate(p.key, next)}
+            onReceiveTodo={(fromKey, todoId) => handleReceiveTodo(fromKey, p.key, todoId)}
+            onEditingChange={(isEditing) => { editingKeyRef.current = isEditing ? p.key : null; }}
+            onMoodChange={(emoji) => handleMoodChange(p.key, emoji)}
+            onNoteChange={(content) => handleNoteChange(p.key, content)}
+            onPhotoChange={(link) => handlePhotoChange(p.key, link)}
+            onColorChange={(colorKey) => handleColorChange(p.key, colorKey)}
+          />
+        ))}
+      </div>
     </div>
   );
 }
