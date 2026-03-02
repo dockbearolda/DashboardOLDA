@@ -1098,7 +1098,7 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
       </div>
 
       {/* ── Tabs ─────────────────────────────────────────────────────────────── */}
-      <div className="border-b border-black/[0.06] bg-white overflow-x-auto">
+      <div className="bg-white overflow-x-auto">
         <div className="flex justify-start items-stretch gap-0 px-4 min-w-max">
           {TABS.map((tab) => {
             const active = activeTab === tab.key;
@@ -1137,13 +1137,14 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
           })}
         </div>
       </div>
+      <div className="h-px bg-black/[0.06] ml-[10%]" />
 
       {/* ── Table ───────────────────────────────────────────────────────────── */}
       <div className="overflow-auto flex-1">
         <div style={{ minWidth: "1050px" }}>
 
           {/* Column headers — sticky */}
-          <div className="grid bg-[#f9f9fb] border-b border-black/[0.06] border-l-4 border-l-transparent sticky top-0 z-10" style={GRID_STYLE}>
+          <div className="grid bg-[#f9f9fb] border-l-4 border-l-transparent sticky top-0 z-10" style={GRID_STYLE}>
             {COL_HEADERS.map(({ label, align, sortKey }, i) => {
               const isSorted = sortConfig?.col === sortKey;
               return (
@@ -1174,6 +1175,7 @@ export function PlanningTable({ items, onItemsChange, onEditingChange }: Plannin
               );
             })}
           </div>
+          <div className="h-px bg-black/[0.06] ml-[20%]" />
 
           {/* Rows — layout animé + indicateur de position fluide */}
           <div
